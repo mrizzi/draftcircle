@@ -31,15 +31,24 @@ A single-process Python server built with FastAPI. Responsibilities:
 
 ### 1.3 Git Repository (Persistence Layer)
 
-Each session is a directory in a git repo. Every mutation (comment, proposal,
+The data repository is **separate from the application source code**. Its path
+is provided at startup via configuration (e.g., environment variable
+`DRAFTCIRCLE_DATA_REPO=/path/to/data`). The application initializes or opens
+the git repo at that path. This keeps session data, user-uploaded seed material,
+and high-volume commits out of the application repository.
+
+Each session is a directory in the data repo. Every mutation (comment, proposal,
 accept, reject, status change) is a git commit with a structured message. This
 provides full history, diffing, and the ability to restore any point in a
 session.
 
-Session directory structure:
+Data repository structure:
 
 ```
-sessions/<session-id>/
+<data-repo>/
+  users.json                # user registry (shared across sessions)
+  templates/                # JSON template files
+  sessions/<session-id>/
   session.json            # session metadata (see schema below)
   sections/
     01-feature-overview.md
@@ -169,13 +178,14 @@ The backend:
 
 ## 3. Template System
 
-Templates are JSON files in the repository:
+Templates are JSON files in the data repository:
 
 ```
-templates/
-  jira-feature.json
-  design-review.json
-  incident-postmortem.json
+<data-repo>/
+  templates/
+    jira-feature.json
+    design-review.json
+    incident-postmortem.json
 ```
 
 Template schema:
@@ -421,7 +431,7 @@ Plain HTML/CSS/JS. No framework, no build step.
 
 ### 7.1 User Registry
 
-A `users.json` file at the repository root:
+A `users.json` file in the data repository root:
 
 ```json
 {

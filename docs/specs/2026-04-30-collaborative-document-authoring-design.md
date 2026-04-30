@@ -48,8 +48,8 @@ Data repository structure:
 <data-repo>/
   users.json                # user registry (shared across sessions)
   templates/                # JSON template files
-  sessions/<session-id>/
-  session.json            # session metadata (see schema below)
+  sessions/<session-id>/    # format: <template>-<YYYYMMDD>-<HHmmss>
+    session.json            # session metadata (see schema below)
   sections/
     01-feature-overview.md
     02-background.md
@@ -68,7 +68,7 @@ Data repository structure:
 
 ```json
 {
-  "id": "a1b2c3d4",
+  "id": "jira-feature-20260430-093000",
   "template": "jira-feature",
   "status": "active",
   "coordinator": "mrizzi",
@@ -94,6 +94,12 @@ Data repository structure:
 ```
 
 Session statuses: `active`, `published` (read-only).
+
+Session ID format: `<template-name>-<YYYYMMDD>-<HHmmss>`, derived from the
+template name and creation timestamp (UTC). This produces human-friendly,
+sortable, filesystem-safe identifiers (e.g., `jira-feature-20260430-093000`).
+If a collision occurs (two sessions from the same template within the same
+second), a numeric suffix is appended (e.g., `jira-feature-20260430-093000-2`).
 
 Commit message convention:
 

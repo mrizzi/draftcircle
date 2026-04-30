@@ -48,6 +48,7 @@ Data repository structure:
 <data-repo>/
   users.json                # user registry (shared across sessions)
   templates/                # JSON template files
+  plugins/                  # custom user-provided output plugins
   sessions/<session-id>/    # format: <template>-<YYYYMMDD>-<HHmmss>
     session.json            # session metadata (see schema below)
   sections/
@@ -380,7 +381,19 @@ Every plugin implements two methods:
 - **Markdown file** — writes output to a file in a git repo
 - **PDF export** — generates a formatted document
 
+### 5.4 Plugin Loading
+
 Plugins are Python modules registered by the template's `output_plugin` field.
+The backend loads plugins from two locations:
+
+1. **Built-in plugins** (`backend/plugins/` in the application repo) — ship with
+   DraftCircle (e.g., Jira, Confluence, markdown)
+2. **Custom plugins** (`plugins/` in the data repo) — user-provided plugins
+   added without modifying the application
+
+Custom plugins take precedence over built-in plugins with the same name,
+allowing users to override default behavior. Both locations follow the same
+module structure and interface.
 
 ## 6. Frontend UI
 

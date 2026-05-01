@@ -43,6 +43,7 @@ class Template(BaseModel):
     output_plugin: str = Field(min_length=1)
     ai_context: str
     sections: list[TemplateSection]
+    slug: str | None = None
 
 
 class User(BaseModel):

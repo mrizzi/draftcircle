@@ -113,7 +113,7 @@ function showCreateForm() {
   select.textContent = '';
   state.templates.forEach(t => {
     const opt = document.createElement('option');
-    opt.value = t.name;
+    opt.value = t.slug || t.name;
     opt.textContent = t.name + ' — ' + t.description;
     select.appendChild(opt);
   });
@@ -163,8 +163,7 @@ function addParticipantRow() {
 
 async function handleCreateSession(e) {
   e.preventDefault();
-  const templateName = document.getElementById('template-select').value;
-  const slug = templateName.toLowerCase().replace(/\s+/g, '-');
+  const slug = document.getElementById('template-select').value;
   const seedText = document.getElementById('seed-text').value.trim();
 
   const rows = document.getElementById('participants-list').children;
@@ -278,7 +277,7 @@ function renderWorkspace() {
 function findTemplate() {
   const s = state.currentSession;
   return state.templates.find(
-    t => t.name.toLowerCase().replace(/\s+/g, '-') === s.template
+    t => (t.slug || t.name) === s.template
   );
 }
 

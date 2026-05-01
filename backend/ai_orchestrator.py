@@ -198,6 +198,7 @@ class AIOrchestrator:
         comment_thread: list[dict],
         new_comment_author: str,
         new_comment_text: str,
+        system_prompt: str = "",
     ) -> ProposalResult | ReplyResult:
         lock_key = f"{session_id}:{section_id}"
         async with self._section_locks[lock_key]:
@@ -222,7 +223,7 @@ class AIOrchestrator:
 
             content_blocks = await self._send_message(
                 session_id=session_id,
-                system="",
+                system=system_prompt,
                 user_content=prompt,
                 tools=[REVISION_TOOL, REPLY_TOOL],
             )

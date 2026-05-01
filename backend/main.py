@@ -1,3 +1,4 @@
+import logging
 import os
 from pathlib import Path
 from typing import Any
@@ -37,6 +38,9 @@ class PublishRequest(BaseModel):
     config: dict[str, Any]
 
 
+logger = logging.getLogger(__name__)
+
+
 def create_app(data_repo_path: str | None = None, anthropic_client=None) -> FastAPI:
     repo_path = data_repo_path or os.getenv("DRAFTCIRCLE_DATA_REPO")
     if not repo_path:
@@ -68,7 +72,9 @@ def create_app(data_repo_path: str | None = None, anthropic_client=None) -> Fast
 
             ai = AIOrchestrator(client=anthropic.AsyncAnthropic(), git=git)
         except Exception:
-            pass
+            logger.warning(
+                "AI unavailable: anthropic client init failed", exc_info=True
+            )
 
     app = FastAPI()
     app.state.sessions = sessions
@@ -130,7 +136,9 @@ def create_app(data_repo_path: str | None = None, anthropic_client=None) -> Fast
                         draft_files,
                     )
             except Exception:
-                pass
+                logger.warning(
+                    "AI draft generation failed for %s", session.id, exc_info=True
+                )
 
         session = sessions.get_session(session.id)
         return session.model_dump(mode="json")
@@ -158,7 +166,7 @@ def create_app(data_repo_path: str | None = None, anthropic_client=None) -> Fast
 
     @app.post("/api/sessions/{session_id}/comments", status_code=201)
     async def add_comment(session_id: str, req: AddCommentRequest):
-        if req.author == "ai":
+        if req.author.lower() == "ai":
             raise HTTPException(status_code=400, detail="'ai' is a reserved author")
         try:
             comment = sessions.add_comment(
@@ -205,6 +213,7 @@ def create_app(data_repo_path: str | None = None, anthropic_client=None) -> Fast
                     comment_thread=thread[:-1],
                     new_comment_author=req.author,
                     new_comment_text=req.text,
+                    system_prompt=template.ai_context,
                 )
 
                 if isinstance(result, ProposalResult):
@@ -239,7 +248,9 @@ def create_app(data_repo_path: str | None = None, anthropic_client=None) -> Fast
                         },
                     )
             except Exception:
-                pass
+                logger.warning(
+                    "AI comment processing failed for %s", session_id, exc_info=True
+                )
 
         return comment
 

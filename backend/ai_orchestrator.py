@@ -206,7 +206,7 @@ class AIOrchestrator:
                 lines = []
                 for c in comment_thread:
                     lines.append(f"- **{c['author']}**: {c['text']}")
-                thread_text = f"Previous comments:\n{''.join(lines)}\n\n"
+                thread_text = "Previous comments:\n" + "\n".join(lines) + "\n\n"
 
             prompt = (
                 f'A comment has been posted on section "{section_title}".\n\n'

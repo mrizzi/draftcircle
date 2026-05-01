@@ -240,8 +240,7 @@ function showInviteLinks(session) {
 // --- Workspace ---
 
 async function openSession(sessionId) {
-  const tokenParam = state.token ? '?token=' + encodeURIComponent(state.token) : '';
-  state.currentSession = await apiFetch('/sessions/' + sessionId + tokenParam);
+  state.currentSession = await apiFetch(sessionPath(sessionId));
   state.sectionContent = {};
   state.sectionComments = {};
   state.sectionProposals = {};
@@ -559,14 +558,14 @@ function canActOnSection(sectionId) {
 async function submitComment() {
   const input = document.getElementById('comment-input');
   const text = input.value.trim();
-  if (!text || !state.activeSection) return;
+  if (!text || !state.activeSection || !state.userId) return;
 
   try {
     await apiFetch('/sessions/' + state.currentSession.id + '/comments', {
       method: 'POST',
       body: JSON.stringify({
         section_id: state.activeSection,
-        author: state.userId || 'anonymous',
+        author: state.userId,
         text: text,
       }),
     });
@@ -577,10 +576,11 @@ async function submitComment() {
 }
 
 async function acceptProposal(proposalId) {
+  if (!state.userId) return;
   try {
     await apiFetch('/sessions/' + state.currentSession.id + '/proposals/' + proposalId + '/accept', {
       method: 'POST',
-      body: JSON.stringify({ user_id: state.userId || 'coordinator' }),
+      body: JSON.stringify({ user_id: state.userId }),
     });
   } catch (err) {
     alert('Error: ' + err.message);
@@ -588,10 +588,11 @@ async function acceptProposal(proposalId) {
 }
 
 async function rejectProposal(proposalId) {
+  if (!state.userId) return;
   try {
     await apiFetch('/sessions/' + state.currentSession.id + '/proposals/' + proposalId + '/reject', {
       method: 'POST',
-      body: JSON.stringify({ user_id: state.userId || 'coordinator' }),
+      body: JSON.stringify({ user_id: state.userId }),
     });
   } catch (err) {
     alert('Error: ' + err.message);
@@ -599,11 +600,11 @@ async function rejectProposal(proposalId) {
 }
 
 async function approveSection() {
-  if (!state.activeSection) return;
+  if (!state.activeSection || !state.userId) return;
   try {
     await apiFetch('/sessions/' + state.currentSession.id + '/sections/' + state.activeSection + '/approve', {
       method: 'POST',
-      body: JSON.stringify({ user_id: state.userId || 'coordinator' }),
+      body: JSON.stringify({ user_id: state.userId }),
     });
   } catch (err) {
     alert('Error: ' + err.message);
@@ -611,11 +612,11 @@ async function approveSection() {
 }
 
 async function reopenSection() {
-  if (!state.activeSection) return;
+  if (!state.activeSection || !state.userId) return;
   try {
     await apiFetch('/sessions/' + state.currentSession.id + '/sections/' + state.activeSection + '/reopen', {
       method: 'POST',
-      body: JSON.stringify({ user_id: state.userId || 'coordinator' }),
+      body: JSON.stringify({ user_id: state.userId }),
     });
   } catch (err) {
     alert('Error: ' + err.message);
@@ -623,11 +624,11 @@ async function reopenSection() {
 }
 
 async function skipSection() {
-  if (!state.activeSection) return;
+  if (!state.activeSection || !state.userId) return;
   try {
     await apiFetch('/sessions/' + state.currentSession.id + '/sections/' + state.activeSection + '/skip', {
       method: 'POST',
-      body: JSON.stringify({ user_id: state.userId || 'coordinator' }),
+      body: JSON.stringify({ user_id: state.userId }),
     });
   } catch (err) {
     alert('Error: ' + err.message);
@@ -671,6 +672,11 @@ function connectWebSocket(sessionId) {
   state.ws = ws;
 }
 
+function sessionPath(sessionId) {
+  const tokenParam = state.token ? '?token=' + encodeURIComponent(state.token) : '';
+  return '/sessions/' + sessionId + tokenParam;
+}
+
 async function handleWsMessage(msg) {
   const sid = state.currentSession ? state.currentSession.id : null;
   if (!sid) return;
@@ -690,12 +696,12 @@ async function handleWsMessage(msg) {
     if (state.activeSection === sectionId) renderDetailPanel();
     renderSectionGrid();
   } else if (msg.type === 'section_approved' || msg.type === 'section_reopened' || msg.type === 'section_skipped') {
-    state.currentSession = await apiFetch('/sessions/' + sid);
+    state.currentSession = await apiFetch(sessionPath(sid));
     updateHeader();
     renderSectionGrid();
     if (state.activeSection === sectionId) renderDetailPanel();
   } else if (msg.type === 'session_published') {
-    state.currentSession = await apiFetch('/sessions/' + sid);
+    state.currentSession = await apiFetch(sessionPath(sid));
     updateHeader();
     renderSectionGrid();
   }

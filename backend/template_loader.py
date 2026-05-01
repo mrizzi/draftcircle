@@ -14,9 +14,7 @@ class TemplateLoader:
         templates = []
         for path in sorted(self.templates_dir.glob("*.json")):
             data = json.loads(path.read_text())
-            template = Template.model_validate(data)
-            template.slug = path.stem
-            templates.append(template)
+            templates.append(Template.model_validate({**data, "slug": path.stem}))
         return templates
 
     def get_template(self, slug: str) -> Template | None:
@@ -26,6 +24,4 @@ class TemplateLoader:
         if not path.exists():
             return None
         data = json.loads(path.read_text())
-        template = Template.model_validate(data)
-        template.slug = slug
-        return template
+        return Template.model_validate({**data, "slug": slug})

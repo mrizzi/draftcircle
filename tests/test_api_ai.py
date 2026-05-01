@@ -94,3 +94,94 @@ class TestSessionCreationWithAI:
         )
         assert resp.status_code == 201
         mock_client.messages.create.assert_not_called()
+
+
+class TestCommentWithAI:
+    def test_comment_triggers_proposal(
+        self, client_ai, mock_client, mock_draft_response
+    ):
+        mock_client.messages.create.return_value = mock_draft_response
+        create_resp = client_ai.post(
+            "/api/sessions",
+            json={
+                "template": "test-template",
+                "coordinator": "alice",
+                "participants": [
+                    {
+                        "user_id": "alice",
+                        "assigned_sections": ["overview"],
+                        "role": "pm",
+                    }
+                ],
+                "seed_text": "Feature X.",
+            },
+        )
+        session_id = create_resp.json()["id"]
+
+        proposal_response = make_response(
+            make_tool_use_block(
+                "propose_revision",
+                {
+                    "revised_text": "Revised overview with more detail.",
+                    "summary": "Added detail per comment",
+                },
+            ),
+            stop_reason="tool_use",
+        )
+        mock_client.messages.create.return_value = proposal_response
+
+        comment_resp = client_ai.post(
+            f"/api/sessions/{session_id}/comments",
+            json={
+                "section_id": "overview",
+                "author": "alice",
+                "text": "Add more detail please",
+            },
+        )
+        assert comment_resp.status_code == 201
+
+        proposals_resp = client_ai.get(
+            f"/api/sessions/{session_id}/sections/overview/proposals"
+        )
+        proposals = proposals_resp.json()
+        assert len(proposals) == 1
+        assert proposals[0]["summary"] == "Added detail per comment"
+
+    def test_comment_triggers_reply(self, client_ai, mock_client, mock_draft_response):
+        mock_client.messages.create.return_value = mock_draft_response
+        create_resp = client_ai.post(
+            "/api/sessions",
+            json={
+                "template": "test-template",
+                "coordinator": "alice",
+                "participants": [],
+                "seed_text": "Feature X.",
+            },
+        )
+        session_id = create_resp.json()["id"]
+
+        reply_response = make_response(
+            make_tool_use_block(
+                "post_reply",
+                {"text": "That's already covered in the requirements."},
+            ),
+            stop_reason="tool_use",
+        )
+        mock_client.messages.create.return_value = reply_response
+
+        client_ai.post(
+            f"/api/sessions/{session_id}/comments",
+            json={
+                "section_id": "overview",
+                "author": "alice",
+                "text": "Is this covered?",
+            },
+        )
+
+        comments_resp = client_ai.get(
+            f"/api/sessions/{session_id}/sections/overview/comments"
+        )
+        comments = comments_resp.json()
+        assert len(comments) == 2
+        assert comments[1]["author"] == "ai"
+        assert "already covered" in comments[1]["text"]

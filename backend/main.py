@@ -166,6 +166,72 @@ def create_app(data_repo_path: str | None = None, anthropic_client=None) -> Fast
                 "section_id": req.section_id,
             },
         )
+
+        if ai and req.author != "ai":
+            try:
+                session = sessions.get_session(session_id)
+                template = templates.get_template(session.template)
+                section_def = next(
+                    (s for s in template.sections if s.id == req.section_id),
+                    None,
+                )
+                meta = session.section_meta[req.section_id]
+                current_draft = (
+                    git.read_file(f"sessions/{session_id}/sections/{meta.filename}.md")
+                    or ""
+                )
+                thread = [
+                    {"author": c.author, "text": c.text}
+                    for c in sessions.get_comments(session_id, req.section_id)
+                ]
+
+                from backend.ai_orchestrator import ProposalResult, ReplyResult
+
+                result = await ai.process_comment(
+                    session_id=session_id,
+                    section_id=req.section_id,
+                    section_title=section_def.title if section_def else req.section_id,
+                    section_guidance=section_def.guidance if section_def else "",
+                    current_draft=current_draft,
+                    comment_thread=thread[:-1],
+                    new_comment_author=req.author,
+                    new_comment_text=req.text,
+                )
+
+                if isinstance(result, ProposalResult):
+                    proposal = sessions.create_proposal(
+                        session_id=session_id,
+                        section_id=req.section_id,
+                        triggered_by_comment=comment.id,
+                        revised_text=result.revised_text,
+                        summary=result.summary,
+                    )
+                    await ws_manager.broadcast(
+                        session_id,
+                        {
+                            "type": "proposal_created",
+                            "section_id": req.section_id,
+                            "proposal": proposal.model_dump(mode="json"),
+                        },
+                    )
+                elif isinstance(result, ReplyResult):
+                    reply = sessions.add_comment(
+                        session_id=session_id,
+                        section_id=req.section_id,
+                        author="ai",
+                        text=result.text,
+                    )
+                    await ws_manager.broadcast(
+                        session_id,
+                        {
+                            "type": "comment_added",
+                            "section_id": req.section_id,
+                            "comment": reply.model_dump(mode="json"),
+                        },
+                    )
+            except Exception:
+                pass
+
         return comment
 
     @app.get("/api/sessions/{session_id}/sections/{section_id}/comments")

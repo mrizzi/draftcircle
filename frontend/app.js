@@ -1,5 +1,9 @@
 'use strict';
 
+if (typeof marked !== 'undefined') {
+  marked.use({ renderer: { html: (token) => esc(token.text) } });
+}
+
 const API = '/api';
 
 const state = {
@@ -124,12 +128,11 @@ function showCreateForm() {
 
 function addParticipantRow() {
   const list = document.getElementById('participants-list');
-  const idx = list.children.length;
   const row = document.createElement('div');
   row.style.cssText = 'display:flex;gap:0.5rem;margin-bottom:0.5rem;align-items:center;';
 
   const userSelect = document.createElement('select');
-  userSelect.name = 'user-' + idx;
+  userSelect.className = 'participant-user';
   userSelect.style.flex = '1';
   state.users.forEach(u => {
     const opt = document.createElement('option');
@@ -139,12 +142,12 @@ function addParticipantRow() {
   });
 
   const roleInput = document.createElement('input');
-  roleInput.name = 'role-' + idx;
+  roleInput.className = 'participant-role';
   roleInput.placeholder = 'Role';
   roleInput.style.cssText = 'flex:1;padding:0.4rem;border:1px solid var(--border);border-radius:4px';
 
   const sectionsInput = document.createElement('input');
-  sectionsInput.name = 'sections-' + idx;
+  sectionsInput.className = 'participant-sections';
   sectionsInput.placeholder = 'Sections (comma-separated)';
   sectionsInput.style.cssText = 'flex:2;padding:0.4rem;border:1px solid var(--border);border-radius:4px';
 
@@ -167,10 +170,10 @@ async function handleCreateSession(e) {
   const seedText = document.getElementById('seed-text').value.trim();
 
   const rows = document.getElementById('participants-list').children;
-  const participants = Array.from(rows).map((row, i) => ({
-    user_id: row.querySelector('[name="user-' + i + '"]').value,
-    role: row.querySelector('[name="role-' + i + '"]').value || 'participant',
-    assigned_sections: row.querySelector('[name="sections-' + i + '"]').value
+  const participants = Array.from(rows).map(row => ({
+    user_id: row.querySelector('.participant-user').value,
+    role: row.querySelector('.participant-role').value || 'participant',
+    assigned_sections: row.querySelector('.participant-sections').value
       .split(',').map(s => s.trim()).filter(Boolean),
   }));
 
@@ -229,7 +232,8 @@ function showInviteLinks(session) {
 // --- Workspace ---
 
 async function openSession(sessionId) {
-  state.currentSession = await apiFetch('/sessions/' + sessionId);
+  const tokenParam = state.token ? '?token=' + encodeURIComponent(state.token) : '';
+  state.currentSession = await apiFetch('/sessions/' + sessionId + tokenParam);
   state.sectionContent = {};
   state.sectionComments = {};
   state.sectionProposals = {};
@@ -396,7 +400,7 @@ function renderDetailPanel() {
   const draftContent = document.createElement('div');
   draftContent.className = 'draft-content';
   if (content) {
-    draftContent.innerHTML = marked.parse(content);
+    draftContent.innerHTML = typeof marked !== 'undefined' ? marked.parse(content) : esc(content);
   } else {
     const em = document.createElement('em');
     em.textContent = 'No content yet.';
@@ -703,14 +707,11 @@ function parseRoute() {
 }
 
 function resolveUserId() {
-  if (!state.currentSession || !state.token) {
+  if (!state.currentSession) {
     state.userId = null;
     return;
   }
-  const participant = state.currentSession.participants.find(p => p.token === state.token);
-  if (participant) {
-    state.userId = participant.user_id;
-  }
+  state.userId = state.currentSession.current_user_id || null;
 }
 
 async function init() {

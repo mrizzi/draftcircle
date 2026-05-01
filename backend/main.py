@@ -102,13 +102,18 @@ def create_app(data_repo_path: str | None = None) -> FastAPI:
         ]
 
     @app.get("/api/sessions/{session_id}")
-    def get_session(session_id: str):
+    def get_session(session_id: str, token: str | None = None):
         session = sessions.get_session(session_id)
         if session is None:
             raise HTTPException(status_code=404, detail="Session not found")
         result = _strip_tokens(session.model_dump(mode="json"))
         result["progress"] = sessions.get_progress(session_id)
         result["ready_to_publish"] = sessions.is_ready_to_publish(session_id)
+        if token:
+            for p in session.participants:
+                if p.token == token:
+                    result["current_user_id"] = p.user_id
+                    break
         return result
 
     @app.post("/api/sessions/{session_id}/comments", status_code=201)

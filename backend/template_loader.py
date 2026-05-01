@@ -26,4 +26,6 @@ class TemplateLoader:
         if not path.exists():
             return None
         data = json.loads(path.read_text())
-        return Template.model_validate(data)
+        template = Template.model_validate(data)
+        template.slug = slug
+        return template

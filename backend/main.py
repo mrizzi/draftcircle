@@ -3,6 +3,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -309,9 +310,8 @@ def create_app(data_repo_path: str | None = None) -> FastAPI:
 
     @app.get("/session/{session_id}")
     async def spa_session_route(session_id: str):
-        from fastapi.responses import FileResponse
-
         return FileResponse(str(frontend_dir / "index.html"))
+
     if frontend_dir.exists():
         app.mount(
             "/", StaticFiles(directory=str(frontend_dir), html=True), name="static"

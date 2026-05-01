@@ -20,6 +20,7 @@ class CreateSessionRequest(BaseModel):
     coordinator: str
     participants: list[ParticipantInput] = Field(default_factory=list)
     seed: dict[str, Any] | None = None
+    seed_text: str | None = None
 
 
 class AddCommentRequest(BaseModel):
@@ -36,7 +37,7 @@ class PublishRequest(BaseModel):
     config: dict[str, Any]
 
 
-def create_app(data_repo_path: str | None = None) -> FastAPI:
+def create_app(data_repo_path: str | None = None, anthropic_client=None) -> FastAPI:
     repo_path = data_repo_path or os.getenv("DRAFTCIRCLE_DATA_REPO")
     if not repo_path:
         raise ValueError(
@@ -49,6 +50,19 @@ def create_app(data_repo_path: str | None = None) -> FastAPI:
     users = UserRegistryManager(git)
     sessions = SessionManager(git, templates)
     ws_manager = WebSocketManager()
+
+    ai = None
+    if anthropic_client is not None:
+        from backend.ai_orchestrator import AIOrchestrator
+
+        ai = AIOrchestrator(client=anthropic_client, git=git)
+    else:
+        try:
+            import anthropic
+
+            ai = AIOrchestrator(client=anthropic.AsyncAnthropic(), git=git)
+        except Exception:
+            pass
 
     app = FastAPI()
     app.state.sessions = sessions
@@ -78,16 +92,39 @@ def create_app(data_repo_path: str | None = None) -> FastAPI:
             raise HTTPException(status_code=409, detail=str(e))
 
     @app.post("/api/sessions", status_code=201)
-    def create_session(req: CreateSessionRequest):
+    async def create_session(req: CreateSessionRequest):
         try:
             session = sessions.create_session(
                 template_slug=req.template,
                 coordinator=req.coordinator,
                 participants=req.participants,
             )
-            return session
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
+
+        if req.seed_text and ai:
+            template = templates.get_template(req.template)
+            try:
+                drafts = await ai.generate_drafts(
+                    session_id=session.id,
+                    template=template,
+                    seed_content=req.seed_text,
+                )
+                for draft in drafts:
+                    meta = session.section_meta.get(draft.section_id)
+                    if meta:
+                        section_path = (
+                            f"sessions/{session.id}/sections/{meta.filename}.md"
+                        )
+                        git.commit(
+                            f"draft: AI generated draft for {meta.filename}",
+                            {section_path: draft.content},
+                        )
+            except Exception:
+                pass
+
+        session = sessions.get_session(session.id)
+        return session.model_dump(mode="json")
 
     def _strip_tokens(session_data: dict) -> dict:
         for p in session_data.get("participants", []):

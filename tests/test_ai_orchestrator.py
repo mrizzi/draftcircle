@@ -96,3 +96,66 @@ class TestConversationPersistence:
         assert len(messages) == 4
         assert messages[0]["content"] == "First message"
         assert messages[2]["content"] == "Second message"
+
+
+class TestGenerateDrafts:
+    @pytest.mark.asyncio
+    async def test_generates_draft_for_each_section(self, orchestrator):
+        from backend.models import Template
+        from tests.conftest import SAMPLE_TEMPLATE
+
+        template = Template.model_validate(SAMPLE_TEMPLATE)
+        orchestrator._client.messages.create.return_value = make_response(
+            make_tool_use_block(
+                "write_section_draft",
+                {"section_id": "overview", "content": "# Overview\n\nDraft content."},
+                tool_id="tool_1",
+            ),
+            make_tool_use_block(
+                "write_section_draft",
+                {"section_id": "details", "content": "# Details\n\nMore content."},
+                tool_id="tool_2",
+            ),
+            make_tool_use_block(
+                "write_section_draft",
+                {"section_id": "notes", "content": "# Notes\n\nSome notes."},
+                tool_id="tool_3",
+            ),
+            stop_reason="tool_use",
+        )
+        drafts = await orchestrator.generate_drafts(
+            session_id="test-session",
+            template=template,
+            seed_content="Feature X enables users to do Y.",
+        )
+        assert len(drafts) == 3
+        assert drafts[0].section_id == "overview"
+        assert "Draft content" in drafts[0].content
+
+    @pytest.mark.asyncio
+    async def test_sends_seed_and_template_context(self, orchestrator):
+        from backend.models import Template
+        from tests.conftest import SAMPLE_TEMPLATE
+
+        template = Template.model_validate(SAMPLE_TEMPLATE)
+        orchestrator._client.messages.create.return_value = make_response(
+            make_tool_use_block(
+                "write_section_draft",
+                {"section_id": "overview", "content": "draft"},
+                tool_id="tool_1",
+            ),
+            stop_reason="tool_use",
+        )
+        await orchestrator.generate_drafts(
+            session_id="test-session",
+            template=template,
+            seed_content="Seed material here",
+        )
+        call_args = orchestrator._client.messages.create.call_args
+        user_messages = [
+            m
+            for m in call_args.kwargs["messages"]
+            if m["role"] == "user" and isinstance(m["content"], str)
+        ]
+        assert "Seed material here" in user_messages[-1]["content"]
+        assert template.ai_context in call_args.kwargs["system"]

@@ -151,3 +151,39 @@ class AIOrchestrator:
 
         self._save_history(session_id, history)
         return response.content
+
+    async def generate_drafts(
+        self, session_id: str, template, seed_content: str
+    ) -> list[DraftResult]:
+        section_descriptions = []
+        for i, section in enumerate(template.sections, start=1):
+            section_descriptions.append(
+                f"{i}. **{section.title}** (id: {section.id}) — {section.guidance}"
+            )
+        sections_text = "\n".join(section_descriptions)
+
+        prompt = (
+            f"Here is the seed material for this document:\n\n"
+            f"{seed_content}\n\n"
+            f"Generate initial drafts for each of the following sections. "
+            f"Call the write_section_draft tool once for each section.\n\n"
+            f"{sections_text}"
+        )
+
+        content_blocks = await self._send_message(
+            session_id=session_id,
+            system=template.ai_context,
+            user_content=prompt,
+            tools=[DRAFT_TOOL],
+        )
+
+        drafts = []
+        for block in content_blocks:
+            if block.type == "tool_use" and block.name == "write_section_draft":
+                drafts.append(
+                    DraftResult(
+                        section_id=block.input["section_id"],
+                        content=block.input["content"],
+                    )
+                )
+        return drafts

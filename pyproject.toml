@@ -12,13 +12,13 @@ dependencies = [
     "pygit2>=1.17",
     "pydantic>=2.11",
     "anthropic>=0.52",
+    "httpx>=0.28",
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest>=8.3",
     "pytest-asyncio>=0.25",
-    "httpx>=0.28",
     "ruff>=0.11",
 ]
 

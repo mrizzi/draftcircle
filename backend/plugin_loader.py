@@ -1,0 +1,28 @@
+import importlib
+import importlib.util
+import re
+from pathlib import Path
+
+from backend.plugins.base import OutputPlugin
+
+_PLUGIN_NAME_RE = re.compile(r"^[a-z0-9_]+$")
+
+
+def load_plugin(name: str, custom_plugins_dir: Path | None = None) -> OutputPlugin:
+    if not _PLUGIN_NAME_RE.match(name):
+        raise ValueError(f"Invalid plugin name '{name}'")
+    if custom_plugins_dir:
+        custom_path = custom_plugins_dir / f"{name}.py"
+        if custom_path.exists():
+            spec = importlib.util.spec_from_file_location(
+                f"custom_plugin_{name}", custom_path
+            )
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+            return module.Plugin()
+
+    try:
+        module = importlib.import_module(f"backend.plugins.{name}")
+        return module.Plugin()
+    except ModuleNotFoundError:
+        raise ValueError(f"Plugin '{name}' not found")

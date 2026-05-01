@@ -305,6 +305,12 @@ def create_app(data_repo_path: str | None = None) -> FastAPI:
                 },
             )
 
+    @app.get("/session/{session_id}")
+    async def spa_session_route(session_id: str):
+        from fastapi.responses import FileResponse
+
+        return FileResponse(str(frontend_dir / "index.html"))
+
     frontend_dir = Path(__file__).parent.parent / "frontend"
     if frontend_dir.exists():
         app.mount(

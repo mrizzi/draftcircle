@@ -64,9 +64,11 @@ function badgeHTML(status) {
 // --- Session List ---
 
 async function loadSessionList() {
-  state.sessions = await apiFetch('/sessions');
-  state.templates = await apiFetch('/templates');
-  state.users = await apiFetch('/users');
+  [state.sessions, state.templates, state.users] = await Promise.all([
+    apiFetch('/sessions'),
+    apiFetch('/templates'),
+    apiFetch('/users'),
+  ]);
   renderSessionList();
   showView('session-list');
   document.getElementById('session-info').textContent = '';
@@ -242,9 +244,15 @@ async function openSession(sessionId) {
   const meta = state.currentSession.section_meta;
   await Promise.all(
     Object.keys(meta).map(async sid => {
-      state.sectionContent[sid] = await apiFetch('/sessions/' + sessionId + '/sections/' + sid);
-      state.sectionComments[sid] = await apiFetch('/sessions/' + sessionId + '/sections/' + sid + '/comments');
-      state.sectionProposals[sid] = await apiFetch('/sessions/' + sessionId + '/sections/' + sid + '/proposals');
+      const base = '/sessions/' + sessionId + '/sections/' + sid;
+      const [content, comments, proposals] = await Promise.all([
+        apiFetch(base),
+        apiFetch(base + '/comments'),
+        apiFetch(base + '/proposals'),
+      ]);
+      state.sectionContent[sid] = content;
+      state.sectionComments[sid] = comments;
+      state.sectionProposals[sid] = proposals;
     })
   );
 

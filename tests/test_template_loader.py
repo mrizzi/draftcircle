@@ -13,6 +13,7 @@ class TestListTemplates:
         templates = loader.list_templates()
         assert len(templates) == 1
         assert templates[0].name == "Test Template"
+        assert templates[0].slug == "test-template"
 
     def test_empty_when_no_templates(self, data_repo):
         (data_repo / "templates").mkdir()
@@ -24,6 +25,7 @@ class TestGetTemplate:
     def test_returns_template_by_slug(self, loader):
         template = loader.get_template("test-template")
         assert template.name == "Test Template"
+        assert template.slug == "test-template"
         assert len(template.sections) == 3
 
     def test_returns_none_for_missing(self, loader):

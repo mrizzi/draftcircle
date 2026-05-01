@@ -26,9 +26,7 @@ class TestAssemble:
             {"title": "Details", "content": "Content B."},
         ]
         adf = json.loads(plugin.assemble(sections))
-        headings = [
-            node for node in adf["content"] if node["type"] == "heading"
-        ]
+        headings = [node for node in adf["content"] if node["type"] == "heading"]
         assert len(headings) == 2
         assert headings[0]["content"][0]["text"] == "Overview"
         assert headings[1]["content"][0]["text"] == "Details"
@@ -39,9 +37,7 @@ class TestAssemble:
             {"title": "Title", "content": "First paragraph.\n\nSecond paragraph."},
         ]
         adf = json.loads(plugin.assemble(sections))
-        paragraphs = [
-            node for node in adf["content"] if node["type"] == "paragraph"
-        ]
+        paragraphs = [node for node in adf["content"] if node["type"] == "paragraph"]
         assert len(paragraphs) == 2
         assert paragraphs[0]["content"][0]["text"] == "First paragraph."
 
@@ -51,9 +47,7 @@ class TestAssemble:
             {"title": "Reqs", "content": "- Item one\n- Item two\n- Item three"},
         ]
         adf = json.loads(plugin.assemble(sections))
-        lists = [
-            node for node in adf["content"] if node["type"] == "bulletList"
-        ]
+        lists = [node for node in adf["content"] if node["type"] == "bulletList"]
         assert len(lists) == 1
         assert len(lists[0]["content"]) == 3
 
@@ -91,7 +85,9 @@ class TestPublish:
         mock_response.json.return_value = {"key": "PROJ-123", "id": "10001"}
         mock_response.raise_for_status = MagicMock()
 
-        with patch("backend.plugins.jira_feature.httpx.post", return_value=mock_response) as mock_post:
+        with patch(
+            "backend.plugins.jira_feature.httpx.post", return_value=mock_response
+        ) as mock_post:
             result = plugin.publish(
                 assembled,
                 {
@@ -123,7 +119,9 @@ class TestPublish:
         mock_response.json.return_value = {"key": "TEST-1"}
         mock_response.raise_for_status = MagicMock()
 
-        with patch("backend.plugins.jira_feature.httpx.post", return_value=mock_response) as mock_post:
+        with patch(
+            "backend.plugins.jira_feature.httpx.post", return_value=mock_response
+        ) as mock_post:
             plugin.publish(
                 assembled,
                 {
@@ -146,7 +144,9 @@ class TestPublish:
             "Bad Request", request=MagicMock(), response=MagicMock()
         )
 
-        with patch("backend.plugins.jira_feature.httpx.post", return_value=mock_response):
+        with patch(
+            "backend.plugins.jira_feature.httpx.post", return_value=mock_response
+        ):
             with pytest.raises(httpx.HTTPStatusError):
                 plugin.publish(
                     assembled,

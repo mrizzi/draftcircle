@@ -4,6 +4,7 @@ import pytest
 
 from backend.plugin_loader import load_plugin
 from backend.plugins.base import OutputPlugin
+from backend.plugins.jira_feature import JiraFeaturePlugin
 from backend.plugins.markdown import MarkdownPlugin
 
 
@@ -72,3 +73,9 @@ class TestPluginLoader:
     def test_rejects_hyphens_in_plugin_name(self):
         with pytest.raises(ValueError, match="Invalid plugin name"):
             load_plugin("my-plugin")
+
+
+class TestJiraPluginLoading:
+    def test_loads_jira_feature_plugin(self):
+        plugin = load_plugin("jira_feature")
+        assert isinstance(plugin, JiraFeaturePlugin)

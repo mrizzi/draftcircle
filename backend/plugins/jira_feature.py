@@ -1,8 +1,7 @@
 import json
+from typing import Any
 
 import httpx
-
-from typing import Any
 
 from backend.models import SectionContent
 from backend.plugins.base import OutputPlugin

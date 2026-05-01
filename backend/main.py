@@ -158,6 +158,8 @@ def create_app(data_repo_path: str | None = None, anthropic_client=None) -> Fast
 
     @app.post("/api/sessions/{session_id}/comments", status_code=201)
     async def add_comment(session_id: str, req: AddCommentRequest):
+        if req.author == "ai":
+            raise HTTPException(status_code=400, detail="'ai' is a reserved author")
         try:
             comment = sessions.add_comment(
                 session_id=session_id,

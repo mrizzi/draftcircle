@@ -150,6 +150,15 @@ class TestCommentEndpoints:
         assert resp.status_code == 201
         assert resp.json()["author"] == "alice"
 
+    def test_rejects_ai_author(self, client, session_with_participant):
+        sid = session_with_participant["id"]
+        resp = client.post(
+            f"/api/sessions/{sid}/comments",
+            json={"section_id": "overview", "author": "ai", "text": "Fake AI"},
+        )
+        assert resp.status_code == 400
+        assert "reserved" in resp.json()["detail"]
+
     def test_get_comments(self, client, session_with_participant):
         sid = session_with_participant["id"]
         client.post(

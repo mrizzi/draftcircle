@@ -266,6 +266,7 @@ async function openSession(sessionId) {
     state.templates = await apiFetch('/templates');
   }
 
+  resolveUserId();
   renderWorkspace();
   showView('workspace');
   connectWebSocket(sessionId);
@@ -662,7 +663,8 @@ function connectWebSocket(sessionId) {
 
   const ws = new WebSocket(url);
   ws.onmessage = async (event) => {
-    const msg = JSON.parse(event.data);
+    let msg;
+    try { msg = JSON.parse(event.data); } catch { return; }
     await handleWsMessage(msg);
   };
   ws.onclose = () => { state.ws = null; };
@@ -752,7 +754,6 @@ async function init() {
   if (route.view === 'workspace' && route.sessionId) {
     state.templates = await apiFetch('/templates');
     await openSession(route.sessionId);
-    resolveUserId();
   } else {
     await loadSessionList();
   }

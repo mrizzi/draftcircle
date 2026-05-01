@@ -1,7 +1,24 @@
 'use strict';
 
+function esc(str) {
+  const d = document.createElement('div');
+  d.textContent = str;
+  return d.innerHTML;
+}
+
 if (typeof marked !== 'undefined') {
-  marked.use({ renderer: { html: (token) => esc(token.text) } });
+  marked.use({
+    renderer: {
+      html: (token) => esc(token.text),
+      link: ({ href, title, tokens }) => {
+        if (href && /^javascript:/i.test(href.replace(/\s/g, ''))) {
+          return esc(tokens.map(t => t.raw).join(''));
+        }
+        const titleAttr = title ? ' title="' + esc(title) + '"' : '';
+        return '<a href="' + esc(href) + '"' + titleAttr + ' rel="noopener noreferrer">' + marked.Parser.parseInline(tokens) + '</a>';
+      },
+    },
+  });
 }
 
 const API = '/api';
@@ -22,12 +39,6 @@ const state = {
 };
 
 // --- Utilities ---
-
-function esc(str) {
-  const d = document.createElement('div');
-  d.textContent = str;
-  return d.innerHTML;
-}
 
 async function apiFetch(path, options = {}) {
   const resp = await fetch(`${API}${path}`, {
@@ -54,11 +65,6 @@ function formatTime(iso) {
   return d.toLocaleString(undefined, {
     month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
   });
-}
-
-function badgeHTML(status) {
-  const cls = 'badge badge-' + status.replace(' ', '-');
-  return '<span class="' + cls + '">' + esc(status) + '</span>';
 }
 
 // --- Session List ---
@@ -540,7 +546,7 @@ function buildProposalEl(proposal, currentContent, showActions) {
 
 function canActOnSection(sectionId) {
   const s = state.currentSession;
-  if (!state.userId) return true;
+  if (!state.userId) return false;
   if (s.coordinator === state.userId) return true;
   return (s.participants || []).some(
     p => p.user_id === state.userId && p.assigned_sections.includes(sectionId)
@@ -652,7 +658,7 @@ function connectWebSocket(sessionId) {
   }
   const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
   const url = proto + '//' + window.location.host + '/ws/sessions/' + sessionId +
-    (state.token ? '?token=' + state.token : '');
+    (state.token ? '?token=' + encodeURIComponent(state.token) : '');
 
   const ws = new WebSocket(url);
   ws.onmessage = async (event) => {
@@ -706,6 +712,7 @@ function parseRoute() {
     if (token) {
       localStorage.setItem('dc-token-' + sessionId, token);
       state.token = token;
+      window.history.replaceState({}, '', path);
     } else {
       state.token = localStorage.getItem('dc-token-' + sessionId);
     }

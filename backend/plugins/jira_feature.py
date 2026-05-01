@@ -72,6 +72,10 @@ class JiraFeaturePlugin(OutputPlugin):
         return json.dumps(adf)
 
     def publish(self, output: str, config: dict[str, Any]) -> str:
+        for key in ("base_url", "project_key", "email", "api_token"):
+            if key not in config:
+                raise ValueError(f"Missing required config key: '{key}'")
+
         base_url = config["base_url"].rstrip("/")
         project_key = config["project_key"]
         issue_type_id = config.get("issue_type_id", "10001")

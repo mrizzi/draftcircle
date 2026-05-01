@@ -157,3 +157,13 @@ class TestPublish:
                         "api_token": "tok",
                     },
                 )
+
+    def test_raises_on_missing_config_key(self):
+        plugin = JiraFeaturePlugin()
+        assembled = plugin.assemble([{"title": "T", "content": "C"}])
+
+        with pytest.raises(ValueError, match="Missing required config key: 'base_url'"):
+            plugin.publish(
+                assembled,
+                {"project_key": "PROJ", "email": "u@e.com", "api_token": "tok"},
+            )

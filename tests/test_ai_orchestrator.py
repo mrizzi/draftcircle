@@ -1,9 +1,10 @@
+import asyncio
 import json
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from backend.ai_orchestrator import AIOrchestrator
+from backend.ai_orchestrator import AIOrchestrator, ProposalResult, ReplyResult
 from backend.git_store import GitStore
 
 
@@ -159,3 +160,123 @@ class TestGenerateDrafts:
         ]
         assert "Seed material here" in user_messages[-1]["content"]
         assert template.ai_context in call_args.kwargs["system"]
+
+
+class TestProcessComment:
+    @pytest.mark.asyncio
+    async def test_returns_proposal_when_revision_needed(self, orchestrator):
+        orchestrator._client.messages.create.return_value = make_response(
+            make_tool_use_block(
+                "propose_revision",
+                {
+                    "revised_text": "Updated draft with rate limiting.",
+                    "summary": "Added rate limiting per Alice's comment",
+                },
+            ),
+            stop_reason="tool_use",
+        )
+        result = await orchestrator.process_comment(
+            session_id="test-session",
+            section_id="nfrs",
+            section_title="Non-Functional Requirements",
+            section_guidance="Architecture characteristics and NFRs",
+            current_draft="Initial NFR draft.",
+            comment_thread=[],
+            new_comment_author="alice",
+            new_comment_text="We need rate limiting.",
+        )
+        assert isinstance(result, ProposalResult)
+        assert "rate limiting" in result.revised_text
+
+    @pytest.mark.asyncio
+    async def test_returns_reply_when_no_revision_needed(self, orchestrator):
+        orchestrator._client.messages.create.return_value = make_response(
+            make_tool_use_block(
+                "post_reply",
+                {
+                    "text": "Good question — rate limiting is already covered in section 5."
+                },
+            ),
+            stop_reason="tool_use",
+        )
+        result = await orchestrator.process_comment(
+            session_id="test-session",
+            section_id="nfrs",
+            section_title="NFRs",
+            section_guidance="NFR guidance",
+            current_draft="Draft.",
+            comment_thread=[],
+            new_comment_author="bob",
+            new_comment_text="Is rate limiting covered?",
+        )
+        assert isinstance(result, ReplyResult)
+        assert "rate limiting" in result.text
+
+    @pytest.mark.asyncio
+    async def test_includes_comment_thread_in_prompt(self, orchestrator):
+        orchestrator._client.messages.create.return_value = make_response(
+            make_tool_use_block("post_reply", {"text": "reply"}),
+            stop_reason="tool_use",
+        )
+        thread = [
+            {"author": "alice", "text": "First comment"},
+            {"author": "bob", "text": "I agree"},
+        ]
+        await orchestrator.process_comment(
+            session_id="test-session",
+            section_id="overview",
+            section_title="Overview",
+            section_guidance="Write an overview",
+            current_draft="Draft.",
+            comment_thread=thread,
+            new_comment_author="alice",
+            new_comment_text="New comment",
+        )
+        call_args = orchestrator._client.messages.create.call_args
+        user_messages = [
+            m
+            for m in call_args.kwargs["messages"]
+            if m["role"] == "user" and isinstance(m["content"], str)
+        ]
+        user_msg = user_messages[-1]["content"]
+        assert "First comment" in user_msg
+        assert "New comment" in user_msg
+
+    @pytest.mark.asyncio
+    async def test_uses_section_lock(self, orchestrator):
+        call_order = []
+
+        async def slow_create(**kwargs):
+            call_order.append("start")
+            await asyncio.sleep(0.05)
+            call_order.append("end")
+            return make_response(
+                make_tool_use_block("post_reply", {"text": "reply"}),
+                stop_reason="tool_use",
+            )
+
+        orchestrator._client.messages.create = AsyncMock(side_effect=slow_create)
+
+        await asyncio.gather(
+            orchestrator.process_comment(
+                "test-session",
+                "overview",
+                "Overview",
+                "g",
+                "Draft.",
+                [],
+                "alice",
+                "comment 1",
+            ),
+            orchestrator.process_comment(
+                "test-session",
+                "overview",
+                "Overview",
+                "g",
+                "Draft.",
+                [],
+                "bob",
+                "comment 2",
+            ),
+        )
+        assert call_order == ["start", "end", "start", "end"]

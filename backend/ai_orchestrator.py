@@ -187,3 +187,55 @@ class AIOrchestrator:
                     )
                 )
         return drafts
+
+    async def process_comment(
+        self,
+        session_id: str,
+        section_id: str,
+        section_title: str,
+        section_guidance: str,
+        current_draft: str,
+        comment_thread: list[dict],
+        new_comment_author: str,
+        new_comment_text: str,
+    ) -> ProposalResult | ReplyResult:
+        lock_key = f"{session_id}:{section_id}"
+        async with self._section_locks[lock_key]:
+            thread_text = ""
+            if comment_thread:
+                lines = []
+                for c in comment_thread:
+                    lines.append(f"- **{c['author']}**: {c['text']}")
+                thread_text = f"Previous comments:\n{''.join(lines)}\n\n"
+
+            prompt = (
+                f'A comment has been posted on section "{section_title}".\n\n'
+                f"Section guidance: {section_guidance}\n\n"
+                f"Current draft:\n{current_draft}\n\n"
+                f"{thread_text}"
+                f"New comment by **{new_comment_author}**: {new_comment_text}\n\n"
+                f"If this comment warrants a revision to the draft, use the "
+                f"propose_revision tool with the complete revised draft. "
+                f"If this is a question or discussion point that doesn't require "
+                f"a draft change, use the post_reply tool."
+            )
+
+            content_blocks = await self._send_message(
+                session_id=session_id,
+                system="",
+                user_content=prompt,
+                tools=[REVISION_TOOL, REPLY_TOOL],
+            )
+
+            for block in content_blocks:
+                if block.type != "tool_use":
+                    continue
+                if block.name == "propose_revision":
+                    return ProposalResult(
+                        revised_text=block.input["revised_text"],
+                        summary=block.input["summary"],
+                    )
+                if block.name == "post_reply":
+                    return ReplyResult(text=block.input["text"])
+
+            return ReplyResult(text="I've noted your comment.")

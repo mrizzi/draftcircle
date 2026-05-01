@@ -1,5 +1,91 @@
 <!DOCTYPE html>
 <html lang="en">
-<head><meta charset="UTF-8"><title>DraftCircle</title></head>
-<body><p>DraftCircle workspace — coming soon.</p></body>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="referrer" content="no-referrer">
+  <title>DraftCircle</title>
+  <link rel="stylesheet" href="/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/marked@15.0.7/marked.min.js"></script>
+</head>
+<body>
+  <header id="app-header">
+    <div class="header-left">
+      <h1 class="logo">DraftCircle</h1>
+      <span id="session-info"></span>
+    </div>
+    <div class="header-right">
+      <span id="progress-indicator"></span>
+      <button id="publish-btn" class="btn btn-primary" disabled style="display:none">Publish</button>
+    </div>
+  </header>
+
+  <main id="app-main">
+    <div id="view-session-list" class="view">
+      <div class="session-list-header">
+        <h2>Sessions</h2>
+        <button id="create-session-btn" class="btn btn-primary">New Session</button>
+      </div>
+      <div id="sessions-container"></div>
+    </div>
+
+    <div id="view-create-session" class="view" style="display:none">
+      <h2>Create New Session</h2>
+      <form id="create-session-form">
+        <label for="template-select">Template</label>
+        <select id="template-select" required></select>
+
+        <label for="seed-text">Seed Material</label>
+        <textarea id="seed-text" rows="6" placeholder="Paste requirements, notes, or context..."></textarea>
+
+        <div id="participants-section">
+          <h3>Participants</h3>
+          <div id="participants-list"></div>
+          <button type="button" id="add-participant-btn" class="btn btn-secondary">Add Participant</button>
+        </div>
+
+        <div class="form-actions">
+          <button type="button" id="cancel-create-btn" class="btn btn-secondary">Cancel</button>
+          <button type="submit" class="btn btn-primary">Create Session</button>
+        </div>
+      </form>
+    </div>
+
+    <div id="view-workspace" class="view" style="display:none">
+      <div id="section-grid"></div>
+      <aside id="detail-panel" class="panel-hidden">
+        <div class="panel-header">
+          <h3 id="panel-title"></h3>
+          <div class="panel-actions">
+            <button id="panel-approve-btn" class="btn btn-success" style="display:none">Approve</button>
+            <button id="panel-skip-btn" class="btn btn-secondary" style="display:none">Skip</button>
+            <button id="panel-reopen-btn" class="btn btn-secondary" style="display:none">Reopen</button>
+          </div>
+          <button id="panel-close-btn" class="btn-icon">&times;</button>
+        </div>
+        <div id="panel-status-badge"></div>
+        <div id="panel-draft" class="panel-section"></div>
+        <div id="panel-proposals" class="panel-section"></div>
+        <div id="panel-comments" class="panel-section">
+          <h4>Comments</h4>
+          <div id="comments-thread"></div>
+          <div class="comment-input-row">
+            <textarea id="comment-input" rows="2" placeholder="Add a comment..."></textarea>
+            <button id="submit-comment-btn" class="btn btn-primary">Send</button>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </main>
+
+  <div id="invite-modal" class="modal" style="display:none">
+    <div class="modal-content">
+      <h3>Invite Links</h3>
+      <div id="invite-links-list"></div>
+      <button id="close-invite-modal" class="btn btn-secondary">Close</button>
+    </div>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
 </html>

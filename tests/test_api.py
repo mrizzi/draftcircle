@@ -372,6 +372,44 @@ class TestHistoryEndpoint:
         assert len(resp.json()) > 0
 
 
+class TestTokenResolution:
+    def test_valid_token_returns_current_user_id(self, client, session_with_participant):
+        sid = session_with_participant["id"]
+        token = session_with_participant["participants"][0]["token"]
+        resp = client.get(f"/api/sessions/{sid}?token={token}")
+        assert resp.status_code == 200
+        assert resp.json()["current_user_id"] == "alice"
+
+    def test_invalid_token_omits_current_user_id(self, client, session_with_participant):
+        sid = session_with_participant["id"]
+        resp = client.get(f"/api/sessions/{sid}?token=bogus-token")
+        assert resp.status_code == 200
+        assert "current_user_id" not in resp.json()
+
+    def test_no_token_omits_current_user_id(self, client, session_with_participant):
+        sid = session_with_participant["id"]
+        resp = client.get(f"/api/sessions/{sid}")
+        assert resp.status_code == 200
+        assert "current_user_id" not in resp.json()
+
+    def test_tokens_still_stripped_when_token_param_used(
+        self, client, session_with_participant
+    ):
+        sid = session_with_participant["id"]
+        token = session_with_participant["participants"][0]["token"]
+        resp = client.get(f"/api/sessions/{sid}?token={token}")
+        for p in resp.json()["participants"]:
+            assert "token" not in p
+
+
+class TestSpaRoute:
+    def test_session_route_returns_html(self, client):
+        resp = client.get("/session/any-session-id")
+        assert resp.status_code == 200
+        assert "text/html" in resp.headers["content-type"]
+        assert "DraftCircle" in resp.text
+
+
 class TestWebSocket:
     def test_connect_and_receive_join(self, client, session_with_participant):
         sid = session_with_participant["id"]

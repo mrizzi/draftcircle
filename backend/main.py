@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -148,13 +149,18 @@ def create_app(data_repo_path: str | None = None, anthropic_client=None) -> Fast
         ]
 
     @app.get("/api/sessions/{session_id}")
-    def get_session(session_id: str):
+    def get_session(session_id: str, token: str | None = None):
         session = sessions.get_session(session_id)
         if session is None:
             raise HTTPException(status_code=404, detail="Session not found")
         result = _strip_tokens(session.model_dump(mode="json"))
         result["progress"] = sessions.get_progress(session_id)
         result["ready_to_publish"] = sessions.is_ready_to_publish(session_id)
+        if token:
+            for p in session.participants:
+                if p.token == token:
+                    result["current_user_id"] = p.user_id
+                    break
         return result
 
     @app.post("/api/sessions/{session_id}/comments", status_code=201)
@@ -422,6 +428,11 @@ def create_app(data_repo_path: str | None = None, anthropic_client=None) -> Fast
             )
 
     frontend_dir = Path(__file__).parent.parent / "frontend"
+
+    @app.get("/session/{session_id}")
+    async def spa_session_route(session_id: str):
+        return FileResponse(str(frontend_dir / "index.html"))
+
     if frontend_dir.exists():
         app.mount(
             "/", StaticFiles(directory=str(frontend_dir), html=True), name="static"

@@ -81,9 +81,7 @@ class TestConversationPersistence:
         }
         git.commit(
             "save history",
-            {
-                "sessions/test-session/ai_history.json": json.dumps(existing)
-            },
+            {"sessions/test-session/ai_history.json": json.dumps(existing)},
         )
         orchestrator._client.messages.create.return_value = make_response(
             make_text_block("Second reply"),

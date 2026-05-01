@@ -81,9 +81,7 @@ class AIOrchestrator:
         self._client = client
         self._git = git
         self._model = model
-        self._section_locks: dict[str, asyncio.Lock] = defaultdict(
-            asyncio.Lock
-        )
+        self._section_locks: dict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
 
     def _history_path(self, session_id: str) -> str:
         return f"sessions/{session_id}/ai_history.json"
@@ -125,9 +123,7 @@ class AIOrchestrator:
         assistant_content = []
         for block in response.content:
             if block.type == "text":
-                assistant_content.append(
-                    {"type": "text", "text": block.text}
-                )
+                assistant_content.append({"type": "text", "text": block.text})
             elif block.type == "tool_use":
                 assistant_content.append(
                     {
@@ -138,9 +134,7 @@ class AIOrchestrator:
                     }
                 )
 
-        history["messages"].append(
-            {"role": "assistant", "content": assistant_content}
-        )
+        history["messages"].append({"role": "assistant", "content": assistant_content})
 
         if response.stop_reason == "tool_use":
             tool_results = []
@@ -153,9 +147,7 @@ class AIOrchestrator:
                             "content": "Acknowledged.",
                         }
                     )
-            history["messages"].append(
-                {"role": "user", "content": tool_results}
-            )
+            history["messages"].append({"role": "user", "content": tool_results})
 
         self._save_history(session_id, history)
         return response.content

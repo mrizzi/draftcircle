@@ -4,6 +4,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 
 from backend.git_store import GitStore
+from backend.models import Template
 
 DRAFT_TOOL = {
     "name": "write_section_draft",
@@ -59,21 +60,37 @@ REPLY_TOOL = {
 }
 
 
-@dataclass
+@dataclass(frozen=True)
 class DraftResult:
     section_id: str
     content: str
 
+    def __post_init__(self):
+        if not self.section_id:
+            raise ValueError("section_id must be non-empty")
+        if not self.content:
+            raise ValueError("content must be non-empty")
 
-@dataclass
+
+@dataclass(frozen=True)
 class ProposalResult:
     revised_text: str
     summary: str
 
+    def __post_init__(self):
+        if not self.revised_text:
+            raise ValueError("revised_text must be non-empty")
+        if not self.summary:
+            raise ValueError("summary must be non-empty")
 
-@dataclass
+
+@dataclass(frozen=True)
 class ReplyResult:
     text: str
+
+    def __post_init__(self):
+        if not self.text:
+            raise ValueError("text must be non-empty")
 
 
 class AIOrchestrator:
@@ -153,7 +170,7 @@ class AIOrchestrator:
         return response.content
 
     async def generate_drafts(
-        self, session_id: str, template, seed_content: str
+        self, session_id: str, template: Template, seed_content: str
     ) -> list[DraftResult]:
         section_descriptions = []
         for i, section in enumerate(template.sections, start=1):

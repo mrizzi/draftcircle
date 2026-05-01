@@ -7,6 +7,7 @@ from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+from backend.ai_orchestrator import AIOrchestrator, ProposalResult, ReplyResult
 from backend.git_store import GitStore
 from backend.models import ParticipantInput, SessionStatus, User
 from backend.plugin_loader import load_plugin
@@ -57,18 +58,10 @@ def create_app(data_repo_path: str | None = None, anthropic_client=None) -> Fast
 
     ai = None
     if anthropic_client is not None:
-        from backend.ai_orchestrator import AIOrchestrator, ProposalResult, ReplyResult
-
         ai = AIOrchestrator(client=anthropic_client, git=git)
     else:
         try:
             import anthropic
-
-            from backend.ai_orchestrator import (
-                AIOrchestrator,
-                ProposalResult,
-                ReplyResult,
-            )
 
             ai = AIOrchestrator(client=anthropic.AsyncAnthropic(), git=git)
         except Exception:

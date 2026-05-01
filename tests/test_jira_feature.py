@@ -1,5 +1,7 @@
 import json
+from unittest.mock import MagicMock, patch
 
+import httpx
 import pytest
 
 from backend.plugins.jira_feature import JiraFeaturePlugin
@@ -74,3 +76,84 @@ class TestAssemble:
         assert "heading" in types
         assert "paragraph" in types
         assert "bulletList" in types
+
+
+class TestPublish:
+    def test_creates_jira_issue(self):
+        plugin = JiraFeaturePlugin()
+        sections = [
+            {"title": "Overview", "content": "Feature description."},
+        ]
+        assembled = plugin.assemble(sections)
+
+        mock_response = MagicMock()
+        mock_response.status_code = 201
+        mock_response.json.return_value = {"key": "PROJ-123", "id": "10001"}
+        mock_response.raise_for_status = MagicMock()
+
+        with patch("backend.plugins.jira_feature.httpx.post", return_value=mock_response) as mock_post:
+            result = plugin.publish(
+                assembled,
+                {
+                    "base_url": "https://myorg.atlassian.net",
+                    "project_key": "PROJ",
+                    "issue_type_id": "10001",
+                    "summary": "New Feature: DraftCircle Test",
+                    "labels": ["feature", "draftcircle"],
+                    "email": "user@example.com",
+                    "api_token": "secret-token",
+                },
+            )
+
+        assert result == "PROJ-123"
+        mock_post.assert_called_once()
+        call_args = mock_post.call_args
+        assert call_args.kwargs["auth"] == ("user@example.com", "secret-token")
+        payload = call_args.kwargs["json"]
+        assert payload["fields"]["project"]["key"] == "PROJ"
+        assert payload["fields"]["summary"] == "New Feature: DraftCircle Test"
+        assert payload["fields"]["labels"] == ["feature", "draftcircle"]
+        assert payload["fields"]["description"]["type"] == "doc"
+
+    def test_publishes_to_correct_url(self):
+        plugin = JiraFeaturePlugin()
+        assembled = plugin.assemble([{"title": "T", "content": "C"}])
+
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"key": "TEST-1"}
+        mock_response.raise_for_status = MagicMock()
+
+        with patch("backend.plugins.jira_feature.httpx.post", return_value=mock_response) as mock_post:
+            plugin.publish(
+                assembled,
+                {
+                    "base_url": "https://myorg.atlassian.net/",
+                    "project_key": "TEST",
+                    "email": "u@e.com",
+                    "api_token": "tok",
+                },
+            )
+
+        url = mock_post.call_args.args[0]
+        assert url == "https://myorg.atlassian.net/rest/api/3/issue"
+
+    def test_raises_on_api_error(self):
+        plugin = JiraFeaturePlugin()
+        assembled = plugin.assemble([{"title": "T", "content": "C"}])
+
+        mock_response = MagicMock()
+        mock_response.raise_for_status.side_effect = httpx.HTTPStatusError(
+            "Bad Request", request=MagicMock(), response=MagicMock()
+        )
+
+        with patch("backend.plugins.jira_feature.httpx.post", return_value=mock_response):
+            with pytest.raises(httpx.HTTPStatusError):
+                plugin.publish(
+                    assembled,
+                    {
+                        "base_url": "https://myorg.atlassian.net",
+                        "project_key": "PROJ",
+                        "email": "u@e.com",
+                        "api_token": "tok",
+                    },
+                )

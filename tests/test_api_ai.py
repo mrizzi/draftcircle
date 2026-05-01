@@ -175,3 +175,52 @@ class TestCommentWithAI:
         assert len(comments) == 2
         assert comments[1]["author"] == "ai"
         assert "already covered" in comments[1]["text"]
+
+
+class TestAIGracefulDegradation:
+    def test_session_created_despite_ai_failure(self, client_ai, mock_client):
+        mock_client.messages.create.side_effect = RuntimeError("API timeout")
+        resp = client_ai.post(
+            "/api/sessions",
+            json={
+                "template": "test-template",
+                "coordinator": "alice",
+                "participants": [],
+                "seed_text": "Feature X.",
+            },
+        )
+        assert resp.status_code == 201
+        session_id = resp.json()["id"]
+        section_resp = client_ai.get(f"/api/sessions/{session_id}/sections/overview")
+        assert section_resp.json()["content"] == ""
+
+    def test_comment_persisted_despite_ai_failure(
+        self, client_ai, mock_client, mock_draft_response
+    ):
+        mock_client.messages.create.return_value = mock_draft_response
+        create_resp = client_ai.post(
+            "/api/sessions",
+            json={
+                "template": "test-template",
+                "coordinator": "alice",
+                "participants": [],
+                "seed_text": "Feature X.",
+            },
+        )
+        session_id = create_resp.json()["id"]
+
+        mock_client.messages.create.side_effect = RuntimeError("API down")
+        resp = client_ai.post(
+            f"/api/sessions/{session_id}/comments",
+            json={
+                "section_id": "overview",
+                "author": "alice",
+                "text": "Please fix this",
+            },
+        )
+        assert resp.status_code == 201
+        comments = client_ai.get(
+            f"/api/sessions/{session_id}/sections/overview/comments"
+        ).json()
+        assert len(comments) == 1
+        assert comments[0]["author"] == "alice"

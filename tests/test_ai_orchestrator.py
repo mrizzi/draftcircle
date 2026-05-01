@@ -4,7 +4,12 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from backend.ai_orchestrator import AIOrchestrator, ProposalResult, ReplyResult
+from backend.ai_orchestrator import (
+    AIOrchestrator,
+    DraftResult,
+    ProposalResult,
+    ReplyResult,
+)
 from backend.git_store import GitStore
 
 
@@ -272,3 +277,59 @@ class TestProcessComment:
             ),
         )
         assert call_order == ["start", "end", "start", "end"]
+
+    @pytest.mark.asyncio
+    async def test_fallback_reply_when_no_tool_used(self, orchestrator):
+        orchestrator._client.messages.create.return_value = make_response(
+            make_text_block("I'm not sure what to do here."),
+            stop_reason="end_turn",
+        )
+        result = await orchestrator.process_comment(
+            session_id="test-session",
+            section_id="overview",
+            section_title="Overview",
+            section_guidance="Write an overview",
+            current_draft="Draft.",
+            comment_thread=[],
+            new_comment_author="alice",
+            new_comment_text="Please revise",
+        )
+        assert isinstance(result, ReplyResult)
+        assert result.text == "I've noted your comment."
+
+
+class TestGenerateDraftsEdgeCases:
+    @pytest.mark.asyncio
+    async def test_returns_empty_list_when_no_tool_used(self, orchestrator):
+        from backend.models import Template
+        from tests.conftest import SAMPLE_TEMPLATE
+
+        template = Template.model_validate(SAMPLE_TEMPLATE)
+        orchestrator._client.messages.create.return_value = make_response(
+            make_text_block("I can't generate drafts right now."),
+            stop_reason="end_turn",
+        )
+        drafts = await orchestrator.generate_drafts(
+            session_id="test-session",
+            template=template,
+            seed_content="Seed material",
+        )
+        assert drafts == []
+
+
+class TestResultDataclasses:
+    def test_draft_result_rejects_empty_section_id(self):
+        with pytest.raises(ValueError, match="section_id"):
+            DraftResult(section_id="", content="some content")
+
+    def test_draft_result_rejects_empty_content(self):
+        with pytest.raises(ValueError, match="content"):
+            DraftResult(section_id="overview", content="")
+
+    def test_proposal_result_rejects_empty_revised_text(self):
+        with pytest.raises(ValueError, match="revised_text"):
+            ProposalResult(revised_text="", summary="changed something")
+
+    def test_reply_result_rejects_empty_text(self):
+        with pytest.raises(ValueError, match="text"):
+            ReplyResult(text="")

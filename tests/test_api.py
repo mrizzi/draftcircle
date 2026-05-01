@@ -159,6 +159,18 @@ class TestCommentEndpoints:
         assert resp.status_code == 400
         assert "reserved" in resp.json()["detail"]
 
+    @pytest.mark.parametrize("author", ["AI", "Ai", "aI"])
+    def test_rejects_ai_author_case_insensitive(
+        self, client, session_with_participant, author
+    ):
+        sid = session_with_participant["id"]
+        resp = client.post(
+            f"/api/sessions/{sid}/comments",
+            json={"section_id": "overview", "author": author, "text": "Fake"},
+        )
+        assert resp.status_code == 400
+        assert "reserved" in resp.json()["detail"]
+
     def test_get_comments(self, client, session_with_participant):
         sid = session_with_participant["id"]
         client.post(

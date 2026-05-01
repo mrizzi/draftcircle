@@ -1,5 +1,4 @@
 import json
-from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from fastapi.testclient import TestClient
@@ -7,14 +6,6 @@ from fastapi.testclient import TestClient
 from backend.main import create_app
 from tests.conftest import SAMPLE_TEMPLATE, SAMPLE_USERS
 from tests.test_ai_orchestrator import make_response, make_tool_use_block
-
-
-@pytest.fixture()
-def mock_client():
-    client = MagicMock()
-    client.messages = MagicMock()
-    client.messages.create = AsyncMock()
-    return client
 
 
 @pytest.fixture()

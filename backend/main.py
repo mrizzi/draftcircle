@@ -53,12 +53,18 @@ def create_app(data_repo_path: str | None = None, anthropic_client=None) -> Fast
 
     ai = None
     if anthropic_client is not None:
-        from backend.ai_orchestrator import AIOrchestrator
+        from backend.ai_orchestrator import AIOrchestrator, ProposalResult, ReplyResult
 
         ai = AIOrchestrator(client=anthropic_client, git=git)
     else:
         try:
             import anthropic
+
+            from backend.ai_orchestrator import (
+                AIOrchestrator,
+                ProposalResult,
+                ReplyResult,
+            )
 
             ai = AIOrchestrator(client=anthropic.AsyncAnthropic(), git=git)
         except Exception:
@@ -110,16 +116,19 @@ def create_app(data_repo_path: str | None = None, anthropic_client=None) -> Fast
                     template=template,
                     seed_content=req.seed_text,
                 )
+                draft_files = {}
                 for draft in drafts:
                     meta = session.section_meta.get(draft.section_id)
                     if meta:
                         section_path = (
                             f"sessions/{session.id}/sections/{meta.filename}.md"
                         )
-                        git.commit(
-                            f"draft: AI generated draft for {meta.filename}",
-                            {section_path: draft.content},
-                        )
+                        draft_files[section_path] = draft.content
+                if draft_files:
+                    git.commit(
+                        f"draft: AI generated drafts for {session.id}",
+                        draft_files,
+                    )
             except Exception:
                 pass
 
@@ -184,8 +193,6 @@ def create_app(data_repo_path: str | None = None, anthropic_client=None) -> Fast
                     {"author": c.author, "text": c.text}
                     for c in sessions.get_comments(session_id, req.section_id)
                 ]
-
-                from backend.ai_orchestrator import ProposalResult, ReplyResult
 
                 result = await ai.process_comment(
                     session_id=session_id,

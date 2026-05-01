@@ -40,14 +40,6 @@ def git(data_repo):
 
 
 @pytest.fixture()
-def mock_client():
-    client = MagicMock()
-    client.messages = MagicMock()
-    client.messages.create = AsyncMock()
-    return client
-
-
-@pytest.fixture()
 def orchestrator(git, mock_client):
     return AIOrchestrator(client=mock_client, git=git)
 

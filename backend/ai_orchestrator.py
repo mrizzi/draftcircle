@@ -78,7 +78,8 @@ async def post_reply(args):
 
 
 DRAFT_SERVER = create_sdk_mcp_server(
-    [write_section_draft, propose_revision, post_reply]
+    name="draftcircle",
+    tools=[write_section_draft, propose_revision, post_reply],
 )
 
 

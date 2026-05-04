@@ -907,6 +907,19 @@ async function init() {
   document.getElementById('comment-input').addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) submitComment();
   });
+  document.getElementById('seed-upload-btn').addEventListener('click', () => {
+    document.getElementById('seed-file').click();
+  });
+  document.getElementById('seed-file').addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    document.getElementById('seed-file-name').textContent = file.name;
+    const reader = new FileReader();
+    reader.onload = () => {
+      document.getElementById('seed-text').value = reader.result;
+    };
+    reader.readAsText(file);
+  });
 
   if (route.view === 'workspace' && route.sessionId) {
     state.templates = await apiFetch('/templates');

@@ -37,6 +37,11 @@
 
         <label for="seed-text">Seed Material</label>
         <textarea id="seed-text" rows="6" placeholder="Paste requirements, notes, or context..."></textarea>
+        <div class="seed-upload-row">
+          <input type="file" id="seed-file" accept=".txt,.md,.text" style="display:none">
+          <button type="button" id="seed-upload-btn" class="btn btn-secondary">Upload text file</button>
+          <span id="seed-file-name" style="font-size:0.8rem;color:var(--text-secondary)"></span>
+        </div>
 
         <div id="section-owners">
           <h3>Section Owners</h3>

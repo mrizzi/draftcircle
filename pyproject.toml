@@ -19,11 +19,17 @@ dependencies = [
 dev = [
     "pytest>=8.3",
     "pytest-asyncio>=0.25",
+    "pytest-playwright>=0.6",
     "ruff>=0.11",
 ]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+    "integration: backend integration tests (no browser)",
+    "e2e: end-to-end browser tests (requires Playwright)",
+]
+asyncio_mode = "auto"
 
 [tool.setuptools]
 packages = ["backend", "backend.plugins"]

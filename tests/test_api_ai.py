@@ -1,3 +1,4 @@
+import json
 from unittest.mock import patch
 
 import pytest
@@ -15,6 +16,17 @@ def app_with_ai(populated_data_repo):
 @pytest.fixture()
 def client_ai(app_with_ai):
     return TestClient(app_with_ai)
+
+
+def parse_streaming_session(resp):
+    """Parse NDJSON streaming response, return the session from the 'done' event."""
+    for line in resp.text.strip().split("\n"):
+        if not line.strip():
+            continue
+        msg = json.loads(line)
+        if msg.get("type") == "done":
+            return msg["session"]
+    raise ValueError("No 'done' event in streaming response")
 
 
 class TestSessionCreationWithAI:
@@ -47,10 +59,57 @@ class TestSessionCreationWithAI:
                 },
             )
         assert resp.status_code == 201
-        session_id = resp.json()["id"]
+        session = parse_streaming_session(resp)
+        session_id = session["id"]
 
         section_resp = client_ai.get(f"/api/sessions/{session_id}/sections/overview")
         assert section_resp.json()["content"] == "AI-generated overview."
+
+    def test_streams_progress_during_draft_generation(self, client_ai):
+        with patch("backend.ai_orchestrator.query") as mock_query:
+            mock_query.return_value = mock_agent_messages(
+                tool_calls=[
+                    ("write_section_draft", {"section_id": "overview", "content": "O"}),
+                    ("write_section_draft", {"section_id": "details", "content": "D"}),
+                ],
+                session_id="s1",
+            )
+            resp = client_ai.post(
+                "/api/sessions",
+                json={
+                    "template": "test-template",
+                    "coordinator": "alice",
+                    "participants": [],
+                    "seed_text": "Seed.",
+                },
+            )
+        assert resp.status_code == 201
+        assert "application/x-ndjson" in resp.headers["content-type"]
+
+        lines = [
+            json.loads(line) for line in resp.text.strip().split("\n") if line.strip()
+        ]
+        progress_msgs = [l for l in lines if l["type"] == "progress"]
+        done_msgs = [l for l in lines if l["type"] == "done"]
+
+        assert len(progress_msgs) >= 1
+        assert any("Generating drafts" in m["message"] for m in progress_msgs)
+        assert any("overview" in m["message"] for m in progress_msgs)
+        assert len(done_msgs) == 1
+        assert "id" in done_msgs[0]["session"]
+
+    def test_no_streaming_without_seed(self, client_ai):
+        resp = client_ai.post(
+            "/api/sessions",
+            json={
+                "template": "test-template",
+                "coordinator": "alice",
+                "participants": [],
+            },
+        )
+        assert resp.status_code == 201
+        assert "application/json" in resp.headers["content-type"]
+        assert "id" in resp.json()
 
     def test_works_without_seed(self, client_ai):
         with patch("backend.ai_orchestrator.query") as mock_query:
@@ -67,6 +126,20 @@ class TestSessionCreationWithAI:
 
 
 class TestCommentWithAI:
+    def _create_session_with_drafts(self, client_ai, mock_query, participants=None):
+        if participants is None:
+            participants = []
+        resp = client_ai.post(
+            "/api/sessions",
+            json={
+                "template": "test-template",
+                "coordinator": "alice",
+                "participants": participants,
+                "seed_text": "Feature X.",
+            },
+        )
+        return parse_streaming_session(resp)["id"]
+
     def test_comment_triggers_proposal(self, client_ai):
         with patch("backend.ai_orchestrator.query") as mock_query:
             mock_query.side_effect = [
@@ -88,10 +161,7 @@ class TestCommentWithAI:
                         ),
                         (
                             "write_section_draft",
-                            {
-                                "section_id": "notes",
-                                "content": "AI-generated notes.",
-                            },
+                            {"section_id": "notes", "content": "AI-generated notes."},
                         ),
                     ],
                     session_id="s1",
@@ -110,22 +180,17 @@ class TestCommentWithAI:
                 ),
             ]
 
-            create_resp = client_ai.post(
-                "/api/sessions",
-                json={
-                    "template": "test-template",
-                    "coordinator": "alice",
-                    "participants": [
-                        {
-                            "user_id": "alice",
-                            "assigned_sections": ["overview"],
-                            "role": "pm",
-                        }
-                    ],
-                    "seed_text": "Feature X.",
-                },
+            session_id = self._create_session_with_drafts(
+                client_ai,
+                mock_query,
+                participants=[
+                    {
+                        "user_id": "alice",
+                        "assigned_sections": ["overview"],
+                        "role": "pm",
+                    }
+                ],
             )
-            session_id = create_resp.json()["id"]
 
             comment_resp = client_ai.post(
                 f"/api/sessions/{session_id}/comments",
@@ -165,10 +230,7 @@ class TestCommentWithAI:
                         ),
                         (
                             "write_section_draft",
-                            {
-                                "section_id": "notes",
-                                "content": "AI-generated notes.",
-                            },
+                            {"section_id": "notes", "content": "AI-generated notes."},
                         ),
                     ],
                     session_id="s1",
@@ -178,22 +240,13 @@ class TestCommentWithAI:
                         (
                             "post_reply",
                             {"text": "That's already covered in the requirements."},
-                        ),
+                        )
                     ],
                     session_id="s2",
                 ),
             ]
 
-            create_resp = client_ai.post(
-                "/api/sessions",
-                json={
-                    "template": "test-template",
-                    "coordinator": "alice",
-                    "participants": [],
-                    "seed_text": "Feature X.",
-                },
-            )
-            session_id = create_resp.json()["id"]
+            session_id = self._create_session_with_drafts(client_ai, mock_query)
 
             client_ai.post(
                 f"/api/sessions/{session_id}/comments",
@@ -227,7 +280,8 @@ class TestAIGracefulDegradation:
                 },
             )
         assert resp.status_code == 201
-        session_id = resp.json()["id"]
+        session = parse_streaming_session(resp)
+        session_id = session["id"]
         section_resp = client_ai.get(f"/api/sessions/{session_id}/sections/overview")
         assert section_resp.json()["content"] == ""
 
@@ -252,10 +306,7 @@ class TestAIGracefulDegradation:
                         ),
                         (
                             "write_section_draft",
-                            {
-                                "section_id": "notes",
-                                "content": "AI-generated notes.",
-                            },
+                            {"section_id": "notes", "content": "AI-generated notes."},
                         ),
                     ],
                     session_id="s1",
@@ -263,7 +314,7 @@ class TestAIGracefulDegradation:
                 RuntimeError("API down"),
             ]
 
-            create_resp = client_ai.post(
+            resp = client_ai.post(
                 "/api/sessions",
                 json={
                     "template": "test-template",
@@ -272,7 +323,7 @@ class TestAIGracefulDegradation:
                     "seed_text": "Feature X.",
                 },
             )
-            session_id = create_resp.json()["id"]
+            session_id = parse_streaming_session(resp)["id"]
 
             resp = client_ai.post(
                 f"/api/sessions/{session_id}/comments",

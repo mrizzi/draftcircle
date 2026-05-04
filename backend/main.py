@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 from pathlib import Path
@@ -95,8 +96,10 @@ def create_app(data_repo_path: str | None = None) -> FastAPI:
         except ValueError as e:
             raise HTTPException(status_code=409, detail=str(e))
 
-    @app.post("/api/sessions", status_code=201)
+    @app.post("/api/sessions")
     async def create_session(req: CreateSessionRequest):
+        from starlette.responses import StreamingResponse
+
         try:
             session = sessions.create_session(
                 template_slug=req.template,
@@ -106,69 +109,71 @@ def create_app(data_repo_path: str | None = None) -> FastAPI:
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
 
-        result = sessions.get_session(session.id)
-        response = result.model_dump(mode="json")
+        if not (req.seed_text and ai):
+            from starlette.responses import JSONResponse
 
-        if req.seed_text and ai:
-            template = templates.get_template(req.template)
+            result = sessions.get_session(session.id)
+            return JSONResponse(result.model_dump(mode="json"), status_code=201)
 
-            async def generate_drafts_background():
-                try:
-                    await ws_manager.broadcast(
-                        session.id,
-                        {"type": "draft_progress", "message": "Generating drafts..."},
-                    )
-                    drafts, agent_session_id = await ai.generate_drafts(
-                        session_id=session.agent_session_id,
-                        template=template,
-                        seed_content=req.seed_text,
-                    )
-                    draft_files = {}
-                    for draft in drafts:
-                        meta = session.section_meta.get(draft.section_id)
-                        if meta:
-                            section_path = (
-                                f"sessions/{session.id}/sections/{meta.filename}.md"
-                            )
-                            draft_files[section_path] = draft.content
-                            await ws_manager.broadcast(
-                                session.id,
-                                {
-                                    "type": "draft_progress",
-                                    "message": f"Drafted: {draft.section_id}",
-                                    "section_id": draft.section_id,
-                                },
-                            )
-                    if draft_files:
-                        git.commit(
-                            f"draft: AI generated drafts for {session.id}",
-                            draft_files,
+        template = templates.get_template(req.template)
+
+        async def stream_drafts():
+            yield (
+                json.dumps({"type": "progress", "message": "Generating drafts..."})
+                + "\n"
+            )
+            try:
+                drafts, agent_session_id = await ai.generate_drafts(
+                    session_id=session.agent_session_id,
+                    template=template,
+                    seed_content=req.seed_text,
+                )
+                draft_files = {}
+                for draft in drafts:
+                    meta = session.section_meta.get(draft.section_id)
+                    if meta:
+                        section_path = (
+                            f"sessions/{session.id}/sections/{meta.filename}.md"
                         )
-                    if agent_session_id:
-                        sessions.set_agent_session_id(session.id, agent_session_id)
-                    await ws_manager.broadcast(
-                        session.id,
-                        {"type": "drafts_complete"},
+                        draft_files[section_path] = draft.content
+                    yield (
+                        json.dumps(
+                            {
+                                "type": "progress",
+                                "message": f"Drafted: {draft.section_id}",
+                            }
+                        )
+                        + "\n"
                     )
-                except Exception:
-                    logger.warning(
-                        "AI draft generation failed for %s",
-                        session.id,
-                        exc_info=True,
+                if draft_files:
+                    git.commit(
+                        f"draft: AI generated drafts for {session.id}",
+                        draft_files,
                     )
-                    await ws_manager.broadcast(
-                        session.id,
-                        {
-                            "type": "draft_progress",
-                            "message": "Draft generation failed",
-                        },
+                if agent_session_id:
+                    sessions.set_agent_session_id(session.id, agent_session_id)
+            except Exception:
+                logger.warning(
+                    "AI draft generation failed for %s",
+                    session.id,
+                    exc_info=True,
+                )
+                yield (
+                    json.dumps(
+                        {"type": "progress", "message": "Draft generation failed"}
                     )
+                    + "\n"
+                )
 
-            import asyncio
+            result = sessions.get_session(session.id)
+            yield (
+                json.dumps({"type": "done", "session": result.model_dump(mode="json")})
+                + "\n"
+            )
 
-            asyncio.create_task(generate_drafts_background())
-
-        return response
+        return StreamingResponse(
+            stream_drafts(), media_type="application/x-ndjson", status_code=201
+        )
 
     def _strip_tokens(session_data: dict) -> dict:
         for p in session_data.get("participants", []):

@@ -765,4 +765,8 @@ async function init() {
   }
 }
 
-init();
+init().catch(err => {
+  document.body.style.padding = '2rem';
+  document.body.textContent = 'Init error: ' + err.message;
+  console.error('init() failed:', err);
+});

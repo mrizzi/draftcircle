@@ -373,14 +373,18 @@ class TestHistoryEndpoint:
 
 
 class TestTokenResolution:
-    def test_valid_token_returns_current_user_id(self, client, session_with_participant):
+    def test_valid_token_returns_current_user_id(
+        self, client, session_with_participant
+    ):
         sid = session_with_participant["id"]
         token = session_with_participant["participants"][0]["token"]
         resp = client.get(f"/api/sessions/{sid}?token={token}")
         assert resp.status_code == 200
         assert resp.json()["current_user_id"] == "alice"
 
-    def test_invalid_token_omits_current_user_id(self, client, session_with_participant):
+    def test_invalid_token_omits_current_user_id(
+        self, client, session_with_participant
+    ):
         sid = session_with_participant["id"]
         resp = client.get(f"/api/sessions/{sid}?token=bogus-token")
         assert resp.status_code == 200

@@ -372,7 +372,12 @@ function updateHeader() {
 }
 
 function renderWorkspace() {
-  renderSectionGrid();
+  const firstSection = Object.keys(state.currentSession.section_meta)[0];
+  if (!state.activeSection && firstSection) {
+    state.activeSection = firstSection;
+  }
+  renderSidebar();
+  renderReviewArea();
 }
 
 function findTemplate() {
@@ -382,83 +387,123 @@ function findTemplate() {
   );
 }
 
-function renderSectionGrid() {
+function renderSidebar() {
   const s = state.currentSession;
   const template = findTemplate();
-  const grid = document.getElementById('section-grid');
-  grid.textContent = '';
+  const list = document.getElementById('section-list');
+  list.textContent = '';
 
   Object.entries(s.section_meta).forEach(([sid, meta]) => {
     const sectionDef = template ? template.sections.find(sec => sec.id === sid) : null;
-    const content = state.sectionContent[sid] ? state.sectionContent[sid].content : '';
-    const preview = content.replace(/[#*_\[\]]/g, '').slice(0, 120);
-    const assignees = (s.participants || [])
-      .filter(p => p.assigned_sections.includes(sid))
-      .map(p => p.user_id).join(', ');
-    const pendingCount = (state.sectionProposals[sid] || [])
-      .filter(p => p.status === 'pending').length;
+    const owner = (s.participants || []).find(p => p.assigned_sections.includes(sid));
+    const pendingCount = (state.sectionProposals[sid] || []).filter(p => p.status === 'pending').length;
 
-    const card = document.createElement('div');
-    card.className = 'section-card' + (state.activeSection === sid ? ' active' : '');
-    card.dataset.section = sid;
+    const item = document.createElement('div');
+    item.className = 'sidebar-item' + (state.activeSection === sid ? ' active' : '');
+    item.dataset.section = sid;
 
     const header = document.createElement('div');
-    header.className = 'section-card-header';
-    const h3 = document.createElement('h3');
-    h3.textContent = sectionDef ? sectionDef.title : sid;
-    header.appendChild(h3);
+    header.className = 'sidebar-item-header';
+    const title = document.createElement('span');
+    title.className = 'sidebar-item-title';
+    title.textContent = sectionDef ? sectionDef.title : sid;
     const badge = document.createElement('span');
     badge.className = 'badge badge-' + meta.status.replace(' ', '-');
     badge.textContent = meta.status;
+    header.appendChild(title);
     header.appendChild(badge);
-    card.appendChild(header);
-
-    if (assignees) {
-      const aDiv = document.createElement('div');
-      aDiv.className = 'section-card-assignees';
-      aDiv.textContent = 'Assigned: ' + assignees;
-      card.appendChild(aDiv);
-    }
-
-    if (preview) {
-      const pDiv = document.createElement('div');
-      pDiv.className = 'section-card-preview';
-      pDiv.textContent = preview + '...';
-      card.appendChild(pDiv);
-    }
+    item.appendChild(header);
 
     if (pendingCount > 0) {
-      const pDiv = document.createElement('div');
-      pDiv.style.cssText = 'margin-top:0.5rem;font-size:0.8rem;color:var(--primary)';
-      pDiv.textContent = pendingCount + ' pending proposal(s)';
-      card.appendChild(pDiv);
+      const pending = document.createElement('div');
+      pending.style.cssText = 'font-size:0.7rem;color:var(--primary);margin-top:0.15rem';
+      pending.textContent = pendingCount + ' pending';
+      item.appendChild(pending);
     }
 
-    card.addEventListener('click', () => openDetailPanel(sid));
-    grid.appendChild(card);
+    const ownerDiv = document.createElement('div');
+    ownerDiv.className = 'sidebar-item-owner';
+    ownerDiv.textContent = owner ? owner.user_id : '— unassigned —';
+    ownerDiv.addEventListener('click', (e) => {
+      e.stopPropagation();
+      showOwnerDropdown(sid, ownerDiv);
+    });
+    item.appendChild(ownerDiv);
+
+    item.addEventListener('click', () => selectSection(sid));
+    list.appendChild(item);
   });
 }
 
-// --- Detail Panel ---
-
-function openDetailPanel(sectionId) {
+function selectSection(sectionId) {
   state.activeSection = sectionId;
-  document.getElementById('detail-panel').classList.add('panel-visible');
-  document.getElementById('section-grid').classList.add('panel-open');
-  renderDetailPanel();
-  renderSectionGrid();
+  renderSidebar();
+  renderReviewArea();
 }
 
-function closeDetailPanel() {
-  state.activeSection = null;
-  document.getElementById('detail-panel').classList.remove('panel-visible');
-  document.getElementById('section-grid').classList.remove('panel-open');
-  renderSectionGrid();
+function showOwnerDropdown(sectionId, container) {
+  if (container.querySelector('select')) return;
+  const s = state.currentSession;
+  const currentOwner = (s.participants || []).find(p => p.assigned_sections.includes(sectionId));
+
+  const sel = document.createElement('select');
+  const emptyOpt = document.createElement('option');
+  emptyOpt.value = '';
+  emptyOpt.textContent = '— unassigned —';
+  sel.appendChild(emptyOpt);
+
+  state.users.forEach(u => {
+    const opt = document.createElement('option');
+    opt.value = u.id;
+    opt.textContent = u.name + ' (' + u.id + ')';
+    if (currentOwner && currentOwner.user_id === u.id) opt.selected = true;
+    sel.appendChild(opt);
+  });
+
+  container.textContent = '';
+  container.appendChild(sel);
+  sel.focus();
+
+  sel.addEventListener('change', async () => {
+    const userId = sel.value;
+    if (!userId) return;
+    try {
+      await apiFetch('/sessions/' + state.currentSession.id + '/sections/' + sectionId + '/assign', {
+        method: 'POST',
+        body: JSON.stringify({ user_id: userId }),
+      });
+    } catch (err) {
+      alert('Error: ' + err.message);
+    }
+  });
+
+  sel.addEventListener('blur', () => {
+    container.textContent = currentOwner ? currentOwner.user_id : '— unassigned —';
+  });
 }
 
-function renderDetailPanel() {
+// --- Review Area ---
+
+function renderReviewArea() {
   const sid = state.activeSection;
-  if (!sid) return;
+  const emptyEl = document.getElementById('review-empty');
+
+  if (!sid) {
+    emptyEl.style.display = 'flex';
+    document.getElementById('review-header').style.display = 'none';
+    document.getElementById('review-status').style.display = 'none';
+    document.getElementById('review-draft').style.display = 'none';
+    document.getElementById('review-proposals').style.display = 'none';
+    document.getElementById('review-comments').style.display = 'none';
+    return;
+  }
+
+  emptyEl.style.display = 'none';
+  document.getElementById('review-header').style.display = 'flex';
+  document.getElementById('review-status').style.display = 'block';
+  document.getElementById('review-draft').style.display = 'block';
+  document.getElementById('review-proposals').style.display = 'block';
+  document.getElementById('review-comments').style.display = 'block';
 
   const s = state.currentSession;
   const meta = s.section_meta[sid];
@@ -469,27 +514,23 @@ function renderDetailPanel() {
   const proposals = state.sectionProposals[sid] || [];
   const isOwner = canActOnSection(sid);
 
-  document.getElementById('panel-title').textContent = sectionDef ? sectionDef.title : sid;
+  document.getElementById('review-title').textContent = sectionDef ? sectionDef.title : sid;
 
-  const statusDiv = document.getElementById('panel-status-badge');
+  const statusDiv = document.getElementById('review-status');
   statusDiv.textContent = '';
-  const wrapper = document.createElement('div');
-  wrapper.style.padding = '0 1.25rem 0.5rem';
   const badge = document.createElement('span');
   badge.className = 'badge badge-' + meta.status.replace(' ', '-');
   badge.textContent = meta.status;
-  wrapper.appendChild(badge);
-  statusDiv.appendChild(wrapper);
+  statusDiv.appendChild(badge);
 
-  document.getElementById('panel-approve-btn').style.display =
+  document.getElementById('review-approve-btn').style.display =
     (isOwner && meta.status !== 'approved' && meta.status !== 'skipped') ? 'inline-block' : 'none';
-  document.getElementById('panel-skip-btn').style.display =
+  document.getElementById('review-skip-btn').style.display =
     (isOwner && sectionDef && sectionDef.priority !== 'required' && meta.status !== 'skipped' && meta.status !== 'approved') ? 'inline-block' : 'none';
-  document.getElementById('panel-reopen-btn').style.display =
+  document.getElementById('review-reopen-btn').style.display =
     (isOwner && meta.status === 'approved') ? 'inline-block' : 'none';
 
-  // Draft
-  const draftEl = document.getElementById('panel-draft');
+  const draftEl = document.getElementById('review-draft');
   draftEl.textContent = '';
   const draftH4 = document.createElement('h4');
   draftH4.textContent = 'Draft';
@@ -497,7 +538,10 @@ function renderDetailPanel() {
   const draftContent = document.createElement('div');
   draftContent.className = 'draft-content';
   if (content) {
-    draftContent.innerHTML = typeof marked !== 'undefined' ? marked.parse(content) : esc(content);
+    const rendered = typeof marked !== 'undefined' ? marked.parse(content) : esc(content);
+    const temp = document.createElement('template');
+    temp.innerHTML = rendered;
+    draftContent.appendChild(temp.content);
   } else {
     const em = document.createElement('em');
     em.textContent = 'No content yet.';
@@ -505,12 +549,10 @@ function renderDetailPanel() {
   }
   draftEl.appendChild(draftContent);
 
-  // Proposals
-  const proposalsEl = document.getElementById('panel-proposals');
+  const proposalsEl = document.getElementById('review-proposals');
   proposalsEl.textContent = '';
   const pendingProposals = proposals.filter(p => p.status === 'pending');
   const pastProposals = proposals.filter(p => p.status !== 'pending');
-
   if (pendingProposals.length > 0) {
     const h4 = document.createElement('h4');
     h4.textContent = 'Pending Proposals';
@@ -525,13 +567,11 @@ function renderDetailPanel() {
     pastProposals.forEach(p => proposalsEl.appendChild(buildProposalEl(p, content, false)));
   }
 
-  // Comments
   const thread = document.getElementById('comments-thread');
   thread.textContent = '';
   comments.forEach(c => {
     const div = document.createElement('div');
     div.className = 'comment' + (c.author === 'ai' ? ' comment-ai' : '');
-
     const headerDiv = document.createElement('div');
     headerDiv.className = 'comment-header';
     const authorSpan = document.createElement('span');
@@ -542,11 +582,9 @@ function renderDetailPanel() {
     timeSpan.textContent = formatTime(c.timestamp);
     headerDiv.appendChild(authorSpan);
     headerDiv.appendChild(timeSpan);
-
     const textDiv = document.createElement('div');
     textDiv.className = 'comment-text';
     textDiv.textContent = c.text;
-
     div.appendChild(headerDiv);
     div.appendChild(textDiv);
     thread.appendChild(div);
@@ -768,25 +806,28 @@ async function handleWsMessage(msg) {
 
   if (msg.type === 'comment_added' && sectionId) {
     state.sectionComments[sectionId] = await apiFetch('/sessions/' + sid + '/sections/' + sectionId + '/comments');
-    if (state.activeSection === sectionId) renderDetailPanel();
+    if (state.activeSection === sectionId) renderReviewArea();
   } else if (msg.type === 'proposal_created' && sectionId) {
     state.sectionProposals[sectionId] = await apiFetch('/sessions/' + sid + '/sections/' + sectionId + '/proposals');
-    if (state.activeSection === sectionId) renderDetailPanel();
-    renderSectionGrid();
+    if (state.activeSection === sectionId) renderReviewArea();
+    renderSidebar();
   } else if ((msg.type === 'proposal_accepted' || msg.type === 'proposal_rejected') && sectionId) {
     state.sectionProposals[sectionId] = await apiFetch('/sessions/' + sid + '/sections/' + sectionId + '/proposals');
     state.sectionContent[sectionId] = await apiFetch('/sessions/' + sid + '/sections/' + sectionId);
-    if (state.activeSection === sectionId) renderDetailPanel();
-    renderSectionGrid();
+    if (state.activeSection === sectionId) renderReviewArea();
+    renderSidebar();
   } else if (msg.type === 'section_approved' || msg.type === 'section_reopened' || msg.type === 'section_skipped') {
     state.currentSession = await apiFetch(sessionPath(sid));
     updateHeader();
-    renderSectionGrid();
-    if (state.activeSection === sectionId) renderDetailPanel();
+    renderSidebar();
+    if (state.activeSection === sectionId) renderReviewArea();
   } else if (msg.type === 'session_published') {
     state.currentSession = await apiFetch(sessionPath(sid));
     updateHeader();
-    renderSectionGrid();
+    renderSidebar();
+  } else if (msg.type === 'section_assigned') {
+    state.currentSession = await apiFetch(sessionPath(sid));
+    renderSidebar();
   }
 }
 
@@ -826,11 +867,11 @@ async function init() {
   document.getElementById('create-session-btn').addEventListener('click', showCreateForm);
   document.getElementById('cancel-create-btn').addEventListener('click', loadSessionList);
   document.getElementById('create-session-form').addEventListener('submit', handleCreateSession);
-  document.getElementById('panel-close-btn').addEventListener('click', closeDetailPanel);
   document.getElementById('submit-comment-btn').addEventListener('click', submitComment);
-  document.getElementById('panel-approve-btn').addEventListener('click', approveSection);
-  document.getElementById('panel-reopen-btn').addEventListener('click', reopenSection);
-  document.getElementById('panel-skip-btn').addEventListener('click', skipSection);
+  document.getElementById('review-approve-btn').addEventListener('click', approveSection);
+  document.getElementById('review-reopen-btn').addEventListener('click', reopenSection);
+  document.getElementById('review-skip-btn').addEventListener('click', skipSection);
+  document.getElementById('invite-links-btn').addEventListener('click', () => showInviteLinks(state.currentSession));
   document.getElementById('publish-btn').addEventListener('click', publishSession);
   document.getElementById('close-invite-modal').addEventListener('click', () => {
     document.getElementById('invite-modal').style.display = 'none';

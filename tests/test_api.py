@@ -396,14 +396,12 @@ class TestTokenResolution:
         assert resp.status_code == 200
         assert "current_user_id" not in resp.json()
 
-    def test_tokens_still_stripped_when_token_param_used(
-        self, client, session_with_participant
-    ):
+    def test_coordinator_token_preserves_tokens(self, client, session_with_participant):
         sid = session_with_participant["id"]
         token = session_with_participant["participants"][0]["token"]
         resp = client.get(f"/api/sessions/{sid}?token={token}")
         for p in resp.json()["participants"]:
-            assert "token" not in p
+            assert "token" in p
 
 
 class TestSpaRoute:
@@ -456,3 +454,57 @@ class TestWebSocket:
             data = ws.receive_json()
             assert data["type"] == "participant_joined"
             assert data["user"]["user_id"] == "alice"
+
+
+class TestCoordinatorTokenAccess:
+    def test_coordinator_sees_participant_tokens(self, client, populated_data_repo):
+        create_resp = client.post(
+            "/api/sessions",
+            json={
+                "template": "test-template",
+                "coordinator": "alice",
+                "participants": [
+                    {
+                        "user_id": "bob",
+                        "assigned_sections": ["overview"],
+                        "role": "participant",
+                    },
+                ],
+            },
+        )
+        session = create_resp.json()
+        sid = session["id"]
+        coordinator_token = next(
+            p["token"] for p in session["participants"] if p["user_id"] == "alice"
+        )
+
+        resp = client.get(f"/api/sessions/{sid}?token={coordinator_token}")
+        data = resp.json()
+        for p in data["participants"]:
+            assert "token" in p
+
+    def test_non_coordinator_tokens_stripped(self, client, populated_data_repo):
+        create_resp = client.post(
+            "/api/sessions",
+            json={
+                "template": "test-template",
+                "coordinator": "alice",
+                "participants": [
+                    {
+                        "user_id": "bob",
+                        "assigned_sections": ["overview"],
+                        "role": "participant",
+                    },
+                ],
+            },
+        )
+        session = create_resp.json()
+        sid = session["id"]
+        bob_token = next(
+            p["token"] for p in session["participants"] if p["user_id"] == "bob"
+        )
+
+        resp = client.get(f"/api/sessions/{sid}?token={bob_token}")
+        data = resp.json()
+        for p in data["participants"]:
+            assert "token" not in p

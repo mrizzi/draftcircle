@@ -153,14 +153,22 @@ def create_app(data_repo_path: str | None = None) -> FastAPI:
         session = sessions.get_session(session_id)
         if session is None:
             raise HTTPException(status_code=404, detail="Session not found")
-        result = _strip_tokens(session.model_dump(mode="json"))
+        result = session.model_dump(mode="json")
         result["progress"] = sessions.get_progress(session_id)
         result["ready_to_publish"] = sessions.is_ready_to_publish(session_id)
+
+        is_coordinator = False
         if token:
             for p in session.participants:
                 if p.token == token:
                     result["current_user_id"] = p.user_id
+                    if session.coordinator == p.user_id:
+                        is_coordinator = True
                     break
+
+        if not is_coordinator:
+            _strip_tokens(result)
+
         return result
 
     @app.post("/api/sessions/{session_id}/comments", status_code=201)

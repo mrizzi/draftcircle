@@ -1,6 +1,6 @@
 # tests/integration/conftest.py
 import json
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import patch
 
 import pygit2
 import pytest
@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 from backend.git_store import GitStore
 from backend.main import create_app
 from tests.conftest import SAMPLE_TEMPLATE
-from tests.test_ai_orchestrator import make_response, make_tool_use_block
+from tests.test_ai_orchestrator import mock_agent_messages
 
 INTEGRATION_USERS = {
     "users": [
@@ -44,44 +44,35 @@ REVISED_TEXT = "# Overview\n\nRevised draft with improvements based on feedback.
 PROPOSAL_SUMMARY = "Expanded overview with more detail per reviewer feedback."
 
 
-def _mock_draft_response():
-    return make_response(
-        make_tool_use_block(
-            "write_section_draft",
-            {"section_id": "overview", "content": DRAFT_CONTENT["overview"]},
-            "t1",
-        ),
-        make_tool_use_block(
-            "write_section_draft",
-            {"section_id": "details", "content": DRAFT_CONTENT["details"]},
-            "t2",
-        ),
-        make_tool_use_block(
-            "write_section_draft",
-            {"section_id": "notes", "content": DRAFT_CONTENT["notes"]},
-            "t3",
-        ),
-        stop_reason="end_turn",
+def _ai_side_effect(**kwargs):
+    prompt = kwargs.get("prompt", "")
+    if "write_section_draft" in prompt or "Generate initial drafts" in prompt:
+        return mock_agent_messages(
+            tool_calls=[
+                (
+                    "write_section_draft",
+                    {"section_id": "overview", "content": DRAFT_CONTENT["overview"]},
+                ),
+                (
+                    "write_section_draft",
+                    {"section_id": "details", "content": DRAFT_CONTENT["details"]},
+                ),
+                (
+                    "write_section_draft",
+                    {"section_id": "notes", "content": DRAFT_CONTENT["notes"]},
+                ),
+            ],
+            session_id="integration-session",
+        )
+    return mock_agent_messages(
+        tool_calls=[
+            (
+                "propose_revision",
+                {"revised_text": REVISED_TEXT, "summary": PROPOSAL_SUMMARY},
+            ),
+        ],
+        session_id="integration-session",
     )
-
-
-def _mock_proposal_response():
-    return make_response(
-        make_tool_use_block(
-            "propose_revision",
-            {"revised_text": REVISED_TEXT, "summary": PROPOSAL_SUMMARY},
-            "t1",
-        ),
-        stop_reason="end_turn",
-    )
-
-
-def _ai_side_effect(*args, **kwargs):
-    tools = kwargs.get("tools") or []
-    tool_names = {t["name"] for t in tools}
-    if "write_section_draft" in tool_names:
-        return _mock_draft_response()
-    return _mock_proposal_response()
 
 
 @pytest.fixture()
@@ -101,14 +92,10 @@ def integration_app(tmp_path):
         },
     )
 
-    mock_client = MagicMock()
-    mock_client.messages = MagicMock()
-    mock_client.messages.create = AsyncMock(side_effect=_ai_side_effect)
-
-    app = create_app(data_repo_path=str(data_repo), anthropic_client=mock_client)
-    app.state.mock_client = mock_client
-    app.state.data_repo_path = data_repo
-    return app
+    with patch("backend.ai_orchestrator.query", side_effect=_ai_side_effect):
+        app = create_app(data_repo_path=str(data_repo))
+        app.state.data_repo_path = data_repo
+        yield app
 
 
 @pytest.fixture()

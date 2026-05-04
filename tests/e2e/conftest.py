@@ -3,7 +3,7 @@ import asyncio
 import json
 import socket
 from threading import Thread
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import patch
 
 import httpx
 import pygit2
@@ -70,11 +70,10 @@ def e2e_server(tmp_path_factory):
         },
     )
 
-    mock_client = MagicMock()
-    mock_client.messages = MagicMock()
-    mock_client.messages.create = AsyncMock(side_effect=_ai_side_effect)
+    patcher = patch("backend.ai_orchestrator.query", side_effect=_ai_side_effect)
+    patcher.start()
 
-    app = create_app(data_repo_path=str(data_dir), anthropic_client=mock_client)
+    app = create_app(data_repo_path=str(data_dir))
 
     port = _find_free_port()
     config = uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning")
@@ -101,6 +100,7 @@ def e2e_server(tmp_path_factory):
         thread.join(timeout=5)
     if not loop.is_closed():
         loop.close()
+    patcher.stop()
 
 
 @pytest.fixture(scope="session")

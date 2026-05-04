@@ -953,6 +953,13 @@ function resolveUserId() {
 async function init() {
   const route = parseRoute();
 
+  document.getElementById('logo-home').addEventListener('click', () => {
+    if (state.ws) { state.ws.close(); state.ws = null; }
+    state.currentSession = null;
+    state.activeSection = null;
+    window.history.pushState({}, '', '/');
+    loadSessionList();
+  });
   document.getElementById('create-session-btn').addEventListener('click', showCreateForm);
   document.getElementById('cancel-create-btn').addEventListener('click', loadSessionList);
   document.getElementById('create-session-form').addEventListener('submit', handleCreateSession);

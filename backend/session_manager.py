@@ -140,6 +140,21 @@ class SessionManager:
             for p in participants
         ]
 
+        coordinator_in_list = any(
+            p.user_id == coordinator for p in session_participants
+        )
+        if not coordinator_in_list:
+            all_section_ids = [s.id for s in template.sections]
+            session_participants.insert(
+                0,
+                Participant(
+                    user_id=coordinator,
+                    token=secrets.token_urlsafe(24),
+                    assigned_sections=all_section_ids,
+                    role="coordinator",
+                ),
+            )
+
         section_meta = {
             section.id: SectionMeta(filename=f"{i:02d}-{section.id}")
             for i, section in enumerate(template.sections, start=1)
@@ -380,6 +395,32 @@ class SessionManager:
 
         session.section_meta[section_id].status = SectionStatus.SKIPPED
         self._save_session(session, f"skip: section {section_id}")
+
+    def assign_section(self, session_id: str, section_id: str, user_id: str) -> None:
+        session = self._require_session(session_id)
+        self._require_active(session)
+
+        if section_id not in session.section_meta:
+            raise ValueError(f"Section '{section_id}' not found")
+
+        for p in session.participants:
+            if section_id in p.assigned_sections:
+                p.assigned_sections.remove(section_id)
+
+        target = next((p for p in session.participants if p.user_id == user_id), None)
+        if target:
+            target.assigned_sections.append(section_id)
+        else:
+            session.participants.append(
+                Participant(
+                    user_id=user_id,
+                    token=secrets.token_urlsafe(24),
+                    assigned_sections=[section_id],
+                    role="participant",
+                )
+            )
+
+        self._save_session(session, f"assign: {section_id} to {user_id}")
 
     def is_ready_to_publish(self, session_id: str) -> bool:
         session = self._require_session(session_id)

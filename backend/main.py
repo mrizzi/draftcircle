@@ -35,6 +35,10 @@ class UserIdRequest(BaseModel):
     user_id: str
 
 
+class AssignRequest(BaseModel):
+    user_id: str
+
+
 class PublishRequest(BaseModel):
     config: dict[str, Any]
 
@@ -342,6 +346,25 @@ def create_app(data_repo_path: str | None = None) -> FastAPI:
             return {"status": "skipped"}
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
+
+    @app.post("/api/sessions/{session_id}/sections/{section_id}/assign")
+    async def assign_section(session_id: str, section_id: str, req: AssignRequest):
+        session = sessions.get_session(session_id)
+        if session is None:
+            raise HTTPException(status_code=404, detail="Session not found")
+        try:
+            sessions.assign_section(session_id, section_id, req.user_id)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        await ws_manager.broadcast(
+            session_id,
+            {
+                "type": "section_assigned",
+                "section_id": section_id,
+                "user_id": req.user_id,
+            },
+        )
+        return {"status": "assigned"}
 
     @app.post("/api/sessions/{session_id}/publish")
     async def publish_session(session_id: str, req: PublishRequest):

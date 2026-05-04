@@ -414,6 +414,40 @@ class TestSpaRoute:
         assert "DraftCircle" in resp.text
 
 
+class TestSectionAssignment:
+    def test_assign_section_to_user(self, client, session_with_participant):
+        sid = session_with_participant["id"]
+        resp = client.post(
+            f"/api/sessions/{sid}/sections/overview/assign",
+            json={"user_id": "bob"},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["status"] == "assigned"
+
+        session_resp = client.get(f"/api/sessions/{sid}")
+        session = session_resp.json()
+        bob_p = next(
+            (p for p in session["participants"] if p["user_id"] == "bob"), None
+        )
+        assert bob_p is not None
+        assert "overview" in bob_p["assigned_sections"]
+
+    def test_assign_section_nonexistent_section(self, client, session_with_participant):
+        sid = session_with_participant["id"]
+        resp = client.post(
+            f"/api/sessions/{sid}/sections/nonexistent/assign",
+            json={"user_id": "bob"},
+        )
+        assert resp.status_code == 400
+
+    def test_assign_section_nonexistent_session(self, client):
+        resp = client.post(
+            "/api/sessions/fake-session/sections/overview/assign",
+            json={"user_id": "bob"},
+        )
+        assert resp.status_code == 404
+
+
 class TestWebSocket:
     def test_connect_and_receive_join(self, client, session_with_participant):
         sid = session_with_participant["id"]

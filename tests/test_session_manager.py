@@ -601,3 +601,50 @@ class TestNonExistentProposal:
         )
         with pytest.raises(ValueError, match="not found"):
             manager.reject_proposal(session.id, "proposal-999", "alice")
+
+
+class TestCoordinatorAsParticipant:
+    def test_coordinator_added_as_participant(self, populated_data_repo):
+        from backend.git_store import GitStore
+        from backend.session_manager import SessionManager
+        from backend.template_loader import TemplateLoader
+
+        git = GitStore(populated_data_repo)
+        templates = TemplateLoader(populated_data_repo)
+        sm = SessionManager(git, templates)
+
+        session = sm.create_session(
+            template_slug="test-template",
+            coordinator="alice",
+            participants=[],
+        )
+        user_ids = [p.user_id for p in session.participants]
+        assert "alice" in user_ids
+        alice_p = next(p for p in session.participants if p.user_id == "alice")
+        assert alice_p.role == "coordinator"
+        assert alice_p.token
+        assert set(alice_p.assigned_sections) == {"overview", "details", "notes"}
+
+    def test_coordinator_not_duplicated_if_already_participant(
+        self, populated_data_repo
+    ):
+        from backend.git_store import GitStore
+        from backend.models import ParticipantInput
+        from backend.session_manager import SessionManager
+        from backend.template_loader import TemplateLoader
+
+        git = GitStore(populated_data_repo)
+        templates = TemplateLoader(populated_data_repo)
+        sm = SessionManager(git, templates)
+
+        session = sm.create_session(
+            template_slug="test-template",
+            coordinator="alice",
+            participants=[
+                ParticipantInput(
+                    user_id="alice", assigned_sections=["overview"], role="coordinator"
+                ),
+            ],
+        )
+        alice_entries = [p for p in session.participants if p.user_id == "alice"]
+        assert len(alice_entries) == 1

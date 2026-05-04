@@ -174,6 +174,10 @@ function addParticipantRow() {
 
 async function handleCreateSession(e) {
   e.preventDefault();
+  const submitBtn = e.target.querySelector('button[type="submit"]');
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'Creating…';
+
   const slug = document.getElementById('template-select').value;
   const seedText = document.getElementById('seed-text').value.trim();
 
@@ -199,6 +203,9 @@ async function handleCreateSession(e) {
     await loadSessionList();
   } catch (err) {
     alert('Error: ' + err.message);
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'Create Session';
   }
 }
 

@@ -6,6 +6,7 @@ import pygit2
 import pytest
 from fastapi.testclient import TestClient
 
+from backend.git_store import GitStore
 from backend.main import create_app
 from tests.conftest import SAMPLE_TEMPLATE
 from tests.test_ai_orchestrator import make_response, make_tool_use_block
@@ -89,9 +90,7 @@ def integration_app(tmp_path):
     data_repo.mkdir()
     pygit2.init_repository(str(data_repo))
 
-    git_store = __import__("backend.git_store", fromlist=["GitStore"]).GitStore(
-        data_repo
-    )
+    git_store = GitStore(data_repo)
     templates_dir = data_repo / "templates"
     templates_dir.mkdir()
     git_store.commit(

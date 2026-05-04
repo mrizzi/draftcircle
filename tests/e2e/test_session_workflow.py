@@ -2,16 +2,9 @@
 import pytest
 from playwright.sync_api import expect
 
+from tests.e2e.conftest import WS_TIMEOUT, close_panel, open_section, wait_for_workspace
+
 pytestmark = pytest.mark.e2e
-
-WORKSPACE_TIMEOUT = 15000
-WS_TIMEOUT = 10000
-
-
-def _wait_for_workspace(pg):
-    expect(pg.locator("#view-workspace")).to_have_class(
-        "view active", timeout=WORKSPACE_TIMEOUT
-    )
 
 
 class TestSessionWorkflow:
@@ -23,14 +16,12 @@ class TestSessionWorkflow:
         sid, tokens = session["id"], session["tokens"]
 
         page.goto(f"{base_url}/session/{sid}?token={tokens['alice']}")
-        _wait_for_workspace(page)
+        wait_for_workspace(page)
 
         # Verify section grid shows all 3 sections
         expect(page.locator(".section-card")).to_have_count(3)
 
-        # Click overview section -- detail panel opens
-        page.locator('.section-card[data-section="overview"]').click()
-        page.wait_for_selector("#detail-panel.panel-visible")
+        open_section(page, "overview")
 
         # Verify draft content is visible (rendered markdown inside .draft-content)
         expect(page.locator("#panel-draft .draft-content")).to_contain_text("Overview")
@@ -62,11 +53,8 @@ class TestSessionWorkflow:
             )
         ).to_have_text("approved", timeout=WS_TIMEOUT)
 
-        # Close panel and navigate to details section
-        page.click("#panel-close-btn")
-        page.wait_for_selector("#detail-panel:not(.panel-visible)")
-        page.locator('.section-card[data-section="details"]').click()
-        page.wait_for_selector("#detail-panel.panel-visible")
+        close_panel(page)
+        open_section(page, "details")
 
         # Approve details
         page.click("#panel-approve-btn")
@@ -76,11 +64,8 @@ class TestSessionWorkflow:
             )
         ).to_have_text("approved", timeout=WS_TIMEOUT)
 
-        # Close panel and navigate to notes section (optional -- can be skipped)
-        page.click("#panel-close-btn")
-        page.wait_for_selector("#detail-panel:not(.panel-visible)")
-        page.locator('.section-card[data-section="notes"]').click()
-        page.wait_for_selector("#detail-panel.panel-visible")
+        close_panel(page)
+        open_section(page, "notes")
 
         # Skip notes (priority=optional so skip button is visible)
         page.click("#panel-skip-btn")
@@ -90,9 +75,7 @@ class TestSessionWorkflow:
             )
         ).to_have_text("skipped", timeout=WS_TIMEOUT)
 
-        # Close panel
-        page.click("#panel-close-btn")
-        page.wait_for_selector("#detail-panel:not(.panel-visible)")
+        close_panel(page)
 
         # Publish -- handle both confirm() and alert() dialogs
         page.on("dialog", lambda d: d.accept())
@@ -109,11 +92,9 @@ class TestSessionWorkflow:
         sid, tokens = session["id"], session["tokens"]
 
         page.goto(f"{base_url}/session/{sid}?token={tokens['bob']}")
-        _wait_for_workspace(page)
+        wait_for_workspace(page)
 
-        # Open overview (bob is assigned to overview)
-        page.locator('.section-card[data-section="overview"]').click()
-        page.wait_for_selector("#detail-panel.panel-visible")
+        open_section(page, "overview")
 
         # Get current draft text
         draft_text = page.locator("#panel-draft .draft-content").text_content()
@@ -140,12 +121,10 @@ class TestSessionWorkflow:
         sid, tokens = session["id"], session["tokens"]
 
         page.goto(f"{base_url}/session/{sid}?token={tokens['alice']}")
-        _wait_for_workspace(page)
+        wait_for_workspace(page)
 
-        page.locator('.section-card[data-section="overview"]').click()
-        page.wait_for_selector("#detail-panel.panel-visible")
+        open_section(page, "overview")
 
-        # Approve
         page.click("#panel-approve-btn")
         expect(
             page.locator(

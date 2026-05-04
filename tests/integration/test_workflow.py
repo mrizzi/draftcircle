@@ -1,11 +1,8 @@
 # tests/integration/test_workflow.py
-import json
-
 import pytest
 
 from tests.integration.conftest import (
     DRAFT_CONTENT,
-    INTEGRATION_USERS,
     PROPOSAL_SUMMARY,
     REVISED_TEXT,
 )

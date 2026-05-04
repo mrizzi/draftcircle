@@ -1,6 +1,4 @@
 # tests/integration/test_multi_client.py
-import time
-
 import pytest
 
 from tests.integration.conftest import drain_join_messages
@@ -173,7 +171,7 @@ class TestThreeClientBroadcast:
                     ws_c.close()
 
                 # carol disconnected (exited context)
-                time.sleep(0.5)  # allow disconnect to propagate
+
                 msg_a = ws_a.receive_json()
                 msg_b = ws_b.receive_json()
                 assert msg_a["type"] == "participant_left"
@@ -199,7 +197,7 @@ class TestThreeClientBroadcast:
                     ws_c.close()
 
                 # carol disconnected — drain participant_left
-                time.sleep(0.5)  # allow disconnect to propagate
+
                 ws_a.receive_json()
                 ws_b.receive_json()
 

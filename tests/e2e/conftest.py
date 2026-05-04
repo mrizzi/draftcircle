@@ -9,10 +9,30 @@ import httpx
 import pygit2
 import pytest
 import uvicorn
+from playwright.sync_api import expect
 
 from backend.main import create_app
 from tests.conftest import SAMPLE_TEMPLATE
 from tests.integration.conftest import INTEGRATION_USERS, _ai_side_effect
+
+WORKSPACE_TIMEOUT = 15000
+WS_TIMEOUT = 10000
+
+
+def wait_for_workspace(page):
+    expect(page.locator("#view-workspace")).to_have_class(
+        "view active", timeout=WORKSPACE_TIMEOUT
+    )
+
+
+def open_section(page, section_id):
+    page.locator(f'.section-card[data-section="{section_id}"]').click()
+    page.wait_for_selector("#detail-panel.panel-visible")
+
+
+def close_panel(page):
+    page.click("#panel-close-btn")
+    page.wait_for_selector("#detail-panel:not(.panel-visible)")
 
 
 def _find_free_port():
@@ -76,8 +96,10 @@ def e2e_server(tmp_path_factory):
 
     server.should_exit = True
     thread.join(timeout=10)
-    if not loop.is_closed():
+    if thread.is_alive():
         loop.call_soon_threadsafe(loop.stop)
+        thread.join(timeout=5)
+    if not loop.is_closed():
         loop.close()
 
 

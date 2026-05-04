@@ -29,7 +29,6 @@ markers = [
     "integration: backend integration tests (no browser)",
     "e2e: end-to-end browser tests (requires Playwright)",
 ]
-asyncio_mode = "auto"
 
 [tool.setuptools]
 packages = ["backend", "backend.plugins"]

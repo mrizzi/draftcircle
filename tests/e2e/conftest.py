@@ -1,4 +1,5 @@
 # tests/e2e/conftest.py
+import asyncio
 import json
 import socket
 from threading import Thread
@@ -59,7 +60,13 @@ def e2e_server(tmp_path_factory):
     config = uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning")
     server = uvicorn.Server(config)
 
-    thread = Thread(target=server.run, daemon=True)
+    loop = asyncio.new_event_loop()
+
+    def _run():
+        asyncio.set_event_loop(loop)
+        loop.run_until_complete(server.serve())
+
+    thread = Thread(target=_run, daemon=True)
     thread.start()
 
     base_url = f"http://127.0.0.1:{port}"
@@ -68,7 +75,10 @@ def e2e_server(tmp_path_factory):
     yield {"url": base_url, "port": port, "data_dir": data_dir, "server": server}
 
     server.should_exit = True
-    thread.join(timeout=5)
+    thread.join(timeout=10)
+    if not loop.is_closed():
+        loop.call_soon_threadsafe(loop.stop)
+        loop.close()
 
 
 @pytest.fixture(scope="session")

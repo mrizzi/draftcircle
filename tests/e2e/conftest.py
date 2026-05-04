@@ -71,7 +71,7 @@ def e2e_server(tmp_path_factory):
     thread.join(timeout=5)
 
 
-@pytest.fixture()
+@pytest.fixture(scope="session")
 def base_url(e2e_server):
     return e2e_server["url"]
 

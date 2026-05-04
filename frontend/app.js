@@ -56,7 +56,10 @@ async function apiFetch(path, options = {}) {
 function showView(name) {
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
   const el = document.getElementById('view-' + name);
-  if (el) el.classList.add('active');
+  if (el) {
+    el.style.removeProperty('display');
+    el.classList.add('active');
+  }
   state.view = name;
 }
 

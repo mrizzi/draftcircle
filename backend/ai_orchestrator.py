@@ -1,15 +1,24 @@
 import asyncio
-import json
 from collections import defaultdict
 from dataclasses import dataclass
 
-from backend.git_store import GitStore
+from claude_agent_sdk import (
+    AssistantMessage,
+    ClaudeAgentOptions,
+    ResultMessage,
+    ToolUseBlock,
+    create_sdk_mcp_server,
+    query,
+    tool,
+)
+
 from backend.models import Template
 
-DRAFT_TOOL = {
-    "name": "write_section_draft",
-    "description": "Write the initial draft for a document section",
-    "input_schema": {
+
+@tool(
+    name="write_section_draft",
+    description="Write the initial draft for a document section",
+    input_schema={
         "type": "object",
         "properties": {
             "section_id": {
@@ -23,12 +32,15 @@ DRAFT_TOOL = {
         },
         "required": ["section_id", "content"],
     },
-}
+)
+async def write_section_draft(args):
+    return {"content": [{"type": "text", "text": "Acknowledged."}]}
 
-REVISION_TOOL = {
-    "name": "propose_revision",
-    "description": "Propose a revision to the current section draft based on the comment",
-    "input_schema": {
+
+@tool(
+    name="propose_revision",
+    description="Propose a revision to the current section draft based on the comment",
+    input_schema={
         "type": "object",
         "properties": {
             "revised_text": {
@@ -42,12 +54,15 @@ REVISION_TOOL = {
         },
         "required": ["revised_text", "summary"],
     },
-}
+)
+async def propose_revision(args):
+    return {"content": [{"type": "text", "text": "Acknowledged."}]}
 
-REPLY_TOOL = {
-    "name": "post_reply",
-    "description": "Reply to the comment without changing the draft",
-    "input_schema": {
+
+@tool(
+    name="post_reply",
+    description="Reply to the comment without changing the draft",
+    input_schema={
         "type": "object",
         "properties": {
             "text": {
@@ -57,7 +72,14 @@ REPLY_TOOL = {
         },
         "required": ["text"],
     },
-}
+)
+async def post_reply(args):
+    return {"content": [{"type": "text", "text": "Acknowledged."}]}
+
+
+DRAFT_SERVER = create_sdk_mcp_server(
+    [write_section_draft, propose_revision, post_reply]
+)
 
 
 @dataclass(frozen=True)
@@ -94,88 +116,53 @@ class ReplyResult:
 
 
 class AIOrchestrator:
-    def __init__(self, client, git: GitStore, model: str = "claude-sonnet-4-6"):
-        self._client = client
-        self._git = git
+    def __init__(self, model: str = "claude-sonnet-4-6"):
         self._model = model
         self._section_locks: dict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
 
-    def _history_path(self, session_id: str) -> str:
-        return f"sessions/{session_id}/ai_history.json"
-
-    def _load_history(self, session_id: str) -> dict:
-        content = self._git.read_file(self._history_path(session_id))
-        if content is None:
-            return {"system": "", "messages": []}
-        return json.loads(content)
-
-    def _save_history(self, session_id: str, history: dict) -> None:
-        self._git.commit(
-            f"ai: update conversation history for {session_id}",
-            {self._history_path(session_id): json.dumps(history, indent=2)},
-        )
-
-    async def _send_message(
+    async def _run_query(
         self,
-        session_id: str,
-        system: str,
-        user_content: str,
-        tools: list[dict] | None = None,
-    ) -> list:
-        history = self._load_history(session_id)
-        history["system"] = system
-        history["messages"].append({"role": "user", "content": user_content})
-
-        kwargs = {
+        prompt: str,
+        system_prompt: str,
+        agent_session_id: str | None = None,
+        allowed_tools: list[str] | None = None,
+    ) -> tuple[list, str | None]:
+        opts_kwargs: dict = {
+            "system_prompt": system_prompt,
             "model": self._model,
-            "max_tokens": 4096,
-            "system": system,
-            "messages": history["messages"],
+            "max_turns": 1,
+            "tools": [],
+            "mcp_servers": {"draftcircle": DRAFT_SERVER},
         }
-        if tools:
-            kwargs["tools"] = tools
+        if allowed_tools is not None:
+            opts_kwargs["allowed_tools"] = allowed_tools
+        if agent_session_id is not None:
+            opts_kwargs["resume"] = agent_session_id
 
-        response = await self._client.messages.create(**kwargs)
+        opts = ClaudeAgentOptions(**opts_kwargs)
 
-        assistant_content = []
-        for block in response.content:
-            if block.type == "text":
-                assistant_content.append({"type": "text", "text": block.text})
-            elif block.type == "tool_use":
-                assistant_content.append(
-                    {
-                        "type": "tool_use",
-                        "id": block.id,
-                        "name": block.name,
-                        "input": block.input,
-                    }
-                )
+        content_blocks: list = []
+        session_id: str | None = None
 
-        history["messages"].append({"role": "assistant", "content": assistant_content})
+        async for message in query(prompt, opts):
+            if isinstance(message, AssistantMessage):
+                for block in message.content:
+                    content_blocks.append(block)
+            elif isinstance(message, ResultMessage):
+                session_id = message.session_id
 
-        if response.stop_reason == "tool_use":
-            tool_results = []
-            for block in response.content:
-                if block.type == "tool_use":
-                    tool_results.append(
-                        {
-                            "type": "tool_result",
-                            "tool_use_id": block.id,
-                            "content": "Acknowledged.",
-                        }
-                    )
-            history["messages"].append({"role": "user", "content": tool_results})
-
-        self._save_history(session_id, history)
-        return response.content
+        return content_blocks, session_id
 
     async def generate_drafts(
-        self, session_id: str, template: Template, seed_content: str
-    ) -> list[DraftResult]:
+        self,
+        session_id: str | None,
+        template: Template,
+        seed_content: str,
+    ) -> tuple[list[DraftResult], str | None]:
         section_descriptions = []
         for i, section in enumerate(template.sections, start=1):
             section_descriptions.append(
-                f"{i}. **{section.title}** (id: {section.id}) — {section.guidance}"
+                f"{i}. **{section.title}** (id: {section.id}) -- {section.guidance}"
             )
         sections_text = "\n".join(section_descriptions)
 
@@ -187,27 +174,28 @@ class AIOrchestrator:
             f"{sections_text}"
         )
 
-        content_blocks = await self._send_message(
-            session_id=session_id,
-            system=template.ai_context,
-            user_content=prompt,
-            tools=[DRAFT_TOOL],
+        allowed_tools = ["mcp__draftcircle__write_section_draft"]
+        content_blocks, agent_session_id = await self._run_query(
+            prompt=prompt,
+            system_prompt=template.ai_context,
+            agent_session_id=session_id,
+            allowed_tools=allowed_tools,
         )
 
         drafts = []
         for block in content_blocks:
-            if block.type == "tool_use" and block.name == "write_section_draft":
+            if isinstance(block, ToolUseBlock) and "write_section_draft" in block.name:
                 drafts.append(
                     DraftResult(
                         section_id=block.input["section_id"],
                         content=block.input["content"],
                     )
                 )
-        return drafts
+        return drafts, agent_session_id
 
     async def process_comment(
         self,
-        session_id: str,
+        session_id: str | None,
         section_id: str,
         section_title: str,
         section_guidance: str,
@@ -216,7 +204,8 @@ class AIOrchestrator:
         new_comment_author: str,
         new_comment_text: str,
         system_prompt: str = "",
-    ) -> ProposalResult | ReplyResult:
+        agent_session_id: str | None = None,
+    ) -> tuple[ProposalResult | ReplyResult, str | None]:
         lock_key = f"{session_id}:{section_id}"
         async with self._section_locks[lock_key]:
             thread_text = ""
@@ -238,22 +227,29 @@ class AIOrchestrator:
                 f"a draft change, use the post_reply tool."
             )
 
-            content_blocks = await self._send_message(
-                session_id=session_id,
-                system=system_prompt,
-                user_content=prompt,
-                tools=[REVISION_TOOL, REPLY_TOOL],
+            allowed_tools = [
+                "mcp__draftcircle__propose_revision",
+                "mcp__draftcircle__post_reply",
+            ]
+            content_blocks, result_session_id = await self._run_query(
+                prompt=prompt,
+                system_prompt=system_prompt,
+                agent_session_id=agent_session_id,
+                allowed_tools=allowed_tools,
             )
 
             for block in content_blocks:
-                if block.type != "tool_use":
+                if not isinstance(block, ToolUseBlock):
                     continue
-                if block.name == "propose_revision":
-                    return ProposalResult(
-                        revised_text=block.input["revised_text"],
-                        summary=block.input["summary"],
+                if "propose_revision" in block.name:
+                    return (
+                        ProposalResult(
+                            revised_text=block.input["revised_text"],
+                            summary=block.input["summary"],
+                        ),
+                        result_session_id,
                     )
-                if block.name == "post_reply":
-                    return ReplyResult(text=block.input["text"])
+                if "post_reply" in block.name:
+                    return ReplyResult(text=block.input["text"]), result_session_id
 
-            return ReplyResult(text="I've noted your comment.")
+            return ReplyResult(text="I've noted your comment."), result_session_id

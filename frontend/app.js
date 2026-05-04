@@ -129,47 +129,97 @@ function showCreateForm() {
     opt.textContent = t.name + ' — ' + t.description;
     select.appendChild(opt);
   });
-  document.getElementById('participants-list').textContent = '';
   document.getElementById('seed-text').value = '';
+
+  select.addEventListener('change', renderSectionOwnersGrid);
+  renderSectionOwnersGrid();
   showView('create-session');
 }
 
-function addParticipantRow() {
-  const list = document.getElementById('participants-list');
-  const row = document.createElement('div');
-  row.style.cssText = 'display:flex;gap:0.5rem;margin-bottom:0.5rem;align-items:center;';
+function renderSectionOwnersGrid() {
+  const slug = document.getElementById('template-select').value;
+  const template = state.templates.find(t => (t.slug || t.name) === slug);
+  const container = document.getElementById('section-owners-grid');
+  container.textContent = '';
 
-  const userSelect = document.createElement('select');
-  userSelect.className = 'participant-user';
-  userSelect.style.flex = '1';
-  state.users.forEach(u => {
-    const opt = document.createElement('option');
-    opt.value = u.id;
-    opt.textContent = u.name + ' (' + u.id + ')';
-    userSelect.appendChild(opt);
+  if (!template) return;
+
+  const table = document.createElement('div');
+  table.className = 'section-owners-table';
+
+  const header = document.createElement('div');
+  header.className = 'section-owners-header';
+  header.appendChild(Object.assign(document.createElement('span'), { textContent: 'Section' }));
+  header.appendChild(Object.assign(document.createElement('span'), { textContent: 'Priority' }));
+  header.appendChild(Object.assign(document.createElement('span'), { textContent: 'Owner' }));
+  table.appendChild(header);
+
+  template.sections.forEach(section => {
+    const row = document.createElement('div');
+    row.className = 'section-owner-row';
+    row.dataset.sectionId = section.id;
+
+    const titleCell = document.createElement('div');
+    const title = document.createElement('div');
+    title.className = 'section-owner-title';
+    title.textContent = section.title;
+    titleCell.appendChild(title);
+    if (section.suggested_roles && section.suggested_roles.length > 0) {
+      const hint = document.createElement('div');
+      hint.className = 'section-owner-hint';
+      hint.textContent = 'Suggested: ' + section.suggested_roles.join(', ');
+      titleCell.appendChild(hint);
+    }
+    row.appendChild(titleCell);
+
+    const badgeCell = document.createElement('div');
+    const badge = document.createElement('span');
+    badge.className = 'badge badge-' + section.priority;
+    badge.textContent = section.priority;
+    badgeCell.appendChild(badge);
+    row.appendChild(badgeCell);
+
+    const ownerCell = document.createElement('div');
+    const ownerSelect = document.createElement('select');
+    ownerSelect.className = 'section-owner-select';
+    ownerSelect.dataset.sectionId = section.id;
+
+    const emptyOpt = document.createElement('option');
+    emptyOpt.value = '';
+    emptyOpt.textContent = '— unassigned —';
+    ownerSelect.appendChild(emptyOpt);
+
+    let autoSelected = '';
+    state.users.forEach(u => {
+      const opt = document.createElement('option');
+      opt.value = u.id;
+      opt.textContent = u.name + ' (' + u.id + ')';
+      ownerSelect.appendChild(opt);
+
+      if (!autoSelected && section.suggested_roles && section.suggested_roles.length > 0) {
+        const userRoles = u.default_roles || [];
+        if (section.suggested_roles.some(r => userRoles.includes(r))) {
+          autoSelected = u.id;
+        }
+      }
+    });
+
+    if (autoSelected) {
+      ownerSelect.value = autoSelected;
+    } else {
+      row.classList.add('unassigned');
+    }
+
+    ownerSelect.addEventListener('change', () => {
+      row.classList.toggle('unassigned', ownerSelect.value === '');
+    });
+
+    ownerCell.appendChild(ownerSelect);
+    row.appendChild(ownerCell);
+    table.appendChild(row);
   });
 
-  const roleInput = document.createElement('input');
-  roleInput.className = 'participant-role';
-  roleInput.placeholder = 'Role';
-  roleInput.style.cssText = 'flex:1;padding:0.4rem;border:1px solid var(--border);border-radius:4px';
-
-  const sectionsInput = document.createElement('input');
-  sectionsInput.className = 'participant-sections';
-  sectionsInput.placeholder = 'Sections (comma-separated)';
-  sectionsInput.style.cssText = 'flex:2;padding:0.4rem;border:1px solid var(--border);border-radius:4px';
-
-  const removeBtn = document.createElement('button');
-  removeBtn.type = 'button';
-  removeBtn.className = 'btn-icon';
-  removeBtn.textContent = '×';
-  removeBtn.addEventListener('click', () => row.remove());
-
-  row.appendChild(userSelect);
-  row.appendChild(roleInput);
-  row.appendChild(sectionsInput);
-  row.appendChild(removeBtn);
-  list.appendChild(row);
+  container.appendChild(table);
 }
 
 async function handleCreateSession(e) {
@@ -756,7 +806,6 @@ async function init() {
   document.getElementById('create-session-btn').addEventListener('click', showCreateForm);
   document.getElementById('cancel-create-btn').addEventListener('click', loadSessionList);
   document.getElementById('create-session-form').addEventListener('submit', handleCreateSession);
-  document.getElementById('add-participant-btn').addEventListener('click', addParticipantRow);
   document.getElementById('panel-close-btn').addEventListener('click', closeDetailPanel);
   document.getElementById('submit-comment-btn').addEventListener('click', submitComment);
   document.getElementById('panel-approve-btn').addEventListener('click', approveSection);

@@ -771,19 +771,55 @@ async function skipSection() {
   }
 }
 
-async function publishSession() {
-  if (!confirm('Publish this session? It will become read-only.')) return;
+function showPublishModal() {
+  const template = findTemplate();
+  const isJira = template && template.output_plugin === 'jira';
+
+  document.getElementById('publish-jira-fields').style.display = isJira ? 'block' : 'none';
+  document.getElementById('publish-markdown-fields').style.display = isJira ? 'none' : 'block';
+
+  if (isJira) {
+    document.getElementById('publish-summary').value = state.currentSession.id;
+  } else {
+    document.getElementById('publish-output-path').value = '/tmp/draftcircle-' + state.currentSession.id + '.md';
+  }
+
+  document.getElementById('publish-modal').style.display = 'flex';
+}
+
+async function handlePublish(e) {
+  e.preventDefault();
+  const template = findTemplate();
+  const isJira = template && template.output_plugin === 'jira';
+
+  let config;
+  if (isJira) {
+    const projectKey = document.getElementById('publish-project-key').value.trim();
+    const summary = document.getElementById('publish-summary').value.trim();
+    const labelsRaw = document.getElementById('publish-labels').value.trim();
+    const labels = labelsRaw ? labelsRaw.split(',').map(l => l.trim()).filter(Boolean) : [];
+    config = { project_key: projectKey, summary: summary || state.currentSession.id, labels };
+  } else {
+    config = { output_path: document.getElementById('publish-output-path').value.trim() };
+  }
+
+  const submitBtn = e.target.querySelector('button[type="submit"]');
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'Publishing…';
+
   try {
     const result = await apiFetch('/sessions/' + state.currentSession.id + '/publish', {
       method: 'POST',
-      body: JSON.stringify({
-        config: { output_path: '/tmp/draftcircle-' + state.currentSession.id + '.md' },
-      }),
+      body: JSON.stringify({ config }),
     });
+    document.getElementById('publish-modal').style.display = 'none';
     alert('Published. Reference: ' + result.output_ref);
     await openSession(state.currentSession.id);
   } catch (err) {
     alert('Error: ' + err.message);
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'Publish';
   }
 }
 
@@ -900,7 +936,11 @@ async function init() {
   document.getElementById('review-reopen-btn').addEventListener('click', reopenSection);
   document.getElementById('review-skip-btn').addEventListener('click', skipSection);
   document.getElementById('invite-links-btn').addEventListener('click', () => showInviteLinks(state.currentSession));
-  document.getElementById('publish-btn').addEventListener('click', publishSession);
+  document.getElementById('publish-btn').addEventListener('click', showPublishModal);
+  document.getElementById('cancel-publish-btn').addEventListener('click', () => {
+    document.getElementById('publish-modal').style.display = 'none';
+  });
+  document.getElementById('publish-form').addEventListener('submit', handlePublish);
   document.getElementById('close-invite-modal').addEventListener('click', () => {
     document.getElementById('invite-modal').style.display = 'none';
   });

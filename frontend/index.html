@@ -97,6 +97,30 @@
     </div>
   </div>
 
+  <div id="publish-modal" class="modal" style="display:none">
+    <div class="modal-content">
+      <h3>Publish Session</h3>
+      <form id="publish-form">
+        <div id="publish-jira-fields">
+          <label for="publish-project-key">Project Key</label>
+          <input id="publish-project-key" type="text" required placeholder="e.g. PROJ">
+          <label for="publish-summary">Summary</label>
+          <input id="publish-summary" type="text" placeholder="Issue title">
+          <label for="publish-labels">Labels (comma-separated)</label>
+          <input id="publish-labels" type="text" placeholder="e.g. feature, draftcircle">
+        </div>
+        <div id="publish-markdown-fields" style="display:none">
+          <label for="publish-output-path">Output Path</label>
+          <input id="publish-output-path" type="text" placeholder="/tmp/output.md">
+        </div>
+        <div class="form-actions">
+          <button type="button" id="cancel-publish-btn" class="btn btn-secondary">Cancel</button>
+          <button type="submit" class="btn btn-primary">Publish</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <script src="/app.js"></script>
 </body>
 </html>

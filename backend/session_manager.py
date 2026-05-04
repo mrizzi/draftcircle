@@ -452,3 +452,8 @@ class SessionManager:
         session.published_at = datetime.now(timezone.utc)
         session.output_ref = output_ref
         self._save_session(session, f"publish: session published to {output_ref}")
+
+    def set_agent_session_id(self, session_id: str, agent_session_id: str) -> None:
+        session = self._require_session(session_id)
+        session.agent_session_id = agent_session_id
+        self._save_session(session, f"session: store agent session ID for {session_id}")

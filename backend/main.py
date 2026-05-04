@@ -8,7 +8,6 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from backend.ai_orchestrator import AIOrchestrator, ProposalResult, ReplyResult
 from backend.git_store import GitStore
 from backend.models import ParticipantInput, SessionStatus, User
 from backend.plugin_loader import load_plugin
@@ -43,7 +42,7 @@ class PublishRequest(BaseModel):
 logger = logging.getLogger(__name__)
 
 
-def create_app(data_repo_path: str | None = None, anthropic_client=None) -> FastAPI:
+def create_app(data_repo_path: str | None = None) -> FastAPI:
     repo_path = data_repo_path or os.getenv("DRAFTCIRCLE_DATA_REPO")
     if not repo_path:
         raise ValueError(
@@ -58,17 +57,12 @@ def create_app(data_repo_path: str | None = None, anthropic_client=None) -> Fast
     ws_manager = WebSocketManager()
 
     ai = None
-    if anthropic_client is not None:
-        ai = AIOrchestrator(client=anthropic_client, git=git)
-    else:
-        try:
-            import anthropic
+    try:
+        from backend.ai_orchestrator import AIOrchestrator
 
-            ai = AIOrchestrator(client=anthropic.AsyncAnthropic(), git=git)
-        except Exception:
-            logger.warning(
-                "AI unavailable: anthropic client init failed", exc_info=True
-            )
+        ai = AIOrchestrator()
+    except Exception:
+        logger.warning("AI unavailable: Agent SDK init failed", exc_info=True)
 
     app = FastAPI()
     app.state.sessions = sessions
@@ -111,8 +105,8 @@ def create_app(data_repo_path: str | None = None, anthropic_client=None) -> Fast
         if req.seed_text and ai:
             template = templates.get_template(req.template)
             try:
-                drafts = await ai.generate_drafts(
-                    session_id=session.id,
+                drafts, agent_session_id = await ai.generate_drafts(
+                    session_id=session.agent_session_id,
                     template=template,
                     seed_content=req.seed_text,
                 )
@@ -129,6 +123,8 @@ def create_app(data_repo_path: str | None = None, anthropic_client=None) -> Fast
                         f"draft: AI generated drafts for {session.id}",
                         draft_files,
                     )
+                if agent_session_id:
+                    sessions.set_agent_session_id(session.id, agent_session_id)
             except Exception:
                 logger.warning(
                     "AI draft generation failed for %s", session.id, exc_info=True
@@ -187,6 +183,8 @@ def create_app(data_repo_path: str | None = None, anthropic_client=None) -> Fast
 
         if ai and req.author != "ai":
             try:
+                from backend.ai_orchestrator import ProposalResult, ReplyResult
+
                 session = sessions.get_session(session_id)
                 template = templates.get_template(session.template)
                 section_def = next(
@@ -203,7 +201,7 @@ def create_app(data_repo_path: str | None = None, anthropic_client=None) -> Fast
                     for c in sessions.get_comments(session_id, req.section_id)
                 ]
 
-                result = await ai.process_comment(
+                result, agent_session_id = await ai.process_comment(
                     session_id=session_id,
                     section_id=req.section_id,
                     section_title=section_def.title if section_def else req.section_id,
@@ -213,7 +211,11 @@ def create_app(data_repo_path: str | None = None, anthropic_client=None) -> Fast
                     new_comment_author=req.author,
                     new_comment_text=req.text,
                     system_prompt=template.ai_context,
+                    agent_session_id=session.agent_session_id,
                 )
+
+                if agent_session_id and agent_session_id != session.agent_session_id:
+                    sessions.set_agent_session_id(session_id, agent_session_id)
 
                 if isinstance(result, ProposalResult):
                     proposal = sessions.create_proposal(

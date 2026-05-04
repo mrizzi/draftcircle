@@ -1,5 +1,4 @@
 import json
-from unittest.mock import AsyncMock, MagicMock
 
 import pygit2
 import pytest
@@ -59,14 +58,6 @@ SAMPLE_USERS = {
         },
     ]
 }
-
-
-@pytest.fixture()
-def mock_client():
-    client = MagicMock()
-    client.messages = MagicMock()
-    client.messages.create = AsyncMock()
-    return client
 
 
 @pytest.fixture()

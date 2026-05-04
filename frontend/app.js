@@ -176,7 +176,11 @@ async function handleCreateSession(e) {
   e.preventDefault();
   const submitBtn = e.target.querySelector('button[type="submit"]');
   submitBtn.disabled = true;
-  submitBtn.textContent = 'Creating…';
+  submitBtn.textContent = '';
+  const spinner = document.createElement('span');
+  spinner.className = 'spinner';
+  submitBtn.appendChild(spinner);
+  submitBtn.appendChild(document.createTextNode('Creating…'));
 
   const slug = document.getElementById('template-select').value;
   const seedText = document.getElementById('seed-text').value.trim();

@@ -118,3 +118,23 @@ class TestTokenResolution:
             msg = ws.receive_json()
             assert msg["type"] == "participant_joined"
             assert msg["user"]["user_id"] is None
+
+    def test_non_participant_cannot_act_on_sections(self, api, session_with_drafts):
+        sid = session_with_drafts["id"]
+
+        api.post(
+            "/api/users",
+            json={
+                "id": "dave",
+                "name": "Dave Park",
+                "email": "dave@example.com",
+                "default_roles": ["writer"],
+            },
+        )
+
+        resp = api.post(
+            f"/api/sessions/{sid}/sections/overview/approve",
+            json={"user_id": "dave"},
+        )
+        assert resp.status_code == 400
+        assert "not authorized" in resp.json()["detail"].lower()

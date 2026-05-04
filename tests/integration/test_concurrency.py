@@ -5,6 +5,11 @@ pytestmark = pytest.mark.integration
 
 
 class TestConcurrentProposals:
+    # True timing overlap ("comment while AI is processing") is not
+    # testable with the instant mock AI. These tests verify the state
+    # machine handles multiple pending proposals correctly, which is
+    # the observable outcome of concurrent processing.
+
     def test_two_proposals_can_coexist(self, api, session_with_drafts):
         sid = session_with_drafts["id"]
 

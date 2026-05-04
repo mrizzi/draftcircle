@@ -108,6 +108,11 @@ def base_url(e2e_server):
     return e2e_server["url"]
 
 
+@pytest.fixture(scope="session")
+def e2e_data_dir(e2e_server):
+    return e2e_server["data_dir"]
+
+
 @pytest.fixture()
 def create_session_via_api(base_url):
     def _create(

@@ -9,7 +9,7 @@ pytestmark = pytest.mark.e2e
 
 
 def _post_comment(base_url, session_id, section_id, author, text):
-    httpx.post(
+    resp = httpx.post(
         f"{base_url}/api/sessions/{session_id}/comments",
         json={
             "section_id": section_id,
@@ -17,6 +17,7 @@ def _post_comment(base_url, session_id, section_id, author, text):
             "text": text,
         },
     )
+    assert resp.status_code == 201
 
 
 class TestProposalPermissions:
@@ -170,13 +171,11 @@ class TestPublishedSessionPermissions:
     """Verify that published sessions disable action controls."""
 
     def test_published_session_hides_approve_and_skip(
-        self, page, base_url, create_session_via_api
+        self, page, base_url, e2e_data_dir, create_session_via_api
     ):
-        """After publishing, approve and skip buttons should be hidden."""
         session = create_session_via_api()
         sid, tokens = session["id"], session["tokens"]
 
-        # Approve and publish via API
         for section_id in ("overview", "details"):
             httpx.post(
                 f"{base_url}/api/sessions/{sid}/sections/{section_id}/approve",
@@ -190,8 +189,8 @@ class TestPublishedSessionPermissions:
             f"{base_url}/api/sessions/{sid}/publish",
             json={
                 "config": {
-                    "output_path": "/tmp/e2e-pub-perm.md",
-                    "allowed_dir": "/tmp",
+                    "output_path": str(e2e_data_dir / f"{sid}-pub.md"),
+                    "allowed_dir": str(e2e_data_dir),
                 }
             },
         )
@@ -211,9 +210,8 @@ class TestPublishedSessionPermissions:
         expect(page.locator("#panel-skip-btn")).to_be_hidden()
 
     def test_published_session_comment_input_disabled_for_approved(
-        self, page, base_url, create_session_via_api
+        self, page, base_url, e2e_data_dir, create_session_via_api
     ):
-        """Comments should be disabled on approved sections in a published session."""
         session = create_session_via_api()
         sid, tokens = session["id"], session["tokens"]
 
@@ -230,8 +228,8 @@ class TestPublishedSessionPermissions:
             f"{base_url}/api/sessions/{sid}/publish",
             json={
                 "config": {
-                    "output_path": "/tmp/e2e-pub-perm2.md",
-                    "allowed_dir": "/tmp",
+                    "output_path": str(e2e_data_dir / f"{sid}-pub.md"),
+                    "allowed_dir": str(e2e_data_dir),
                 }
             },
         )

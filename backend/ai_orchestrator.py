@@ -1,6 +1,7 @@
 import asyncio
 from collections import defaultdict
 from dataclasses import dataclass
+from typing import Any
 
 from claude_agent_sdk import (
     AssistantMessage,
@@ -33,7 +34,7 @@ from backend.models import Template
         "required": ["section_id", "content"],
     },
 )
-async def write_section_draft(args):
+async def write_section_draft(args: dict[str, Any]) -> dict[str, Any]:
     return {"content": [{"type": "text", "text": "Acknowledged."}]}
 
 
@@ -55,7 +56,7 @@ async def write_section_draft(args):
         "required": ["revised_text", "summary"],
     },
 )
-async def propose_revision(args):
+async def propose_revision(args: dict[str, Any]) -> dict[str, Any]:
     return {"content": [{"type": "text", "text": "Acknowledged."}]}
 
 
@@ -73,7 +74,7 @@ async def propose_revision(args):
         "required": ["text"],
     },
 )
-async def post_reply(args):
+async def post_reply(args: dict[str, Any]) -> dict[str, Any]:
     return {"content": [{"type": "text", "text": "Acknowledged."}]}
 
 
@@ -131,7 +132,8 @@ class AIOrchestrator:
         opts_kwargs: dict = {
             "system_prompt": system_prompt,
             "model": self._model,
-            "max_turns": 1,
+            "max_turns": 3,
+            "permission_mode": "bypassPermissions",
             "tools": [],
             "mcp_servers": {"draftcircle": DRAFT_SERVER},
         }
@@ -175,12 +177,11 @@ class AIOrchestrator:
             f"{sections_text}"
         )
 
-        allowed_tools = ["mcp__draftcircle__write_section_draft"]
         content_blocks, agent_session_id = await self._run_query(
             prompt=prompt,
             system_prompt=template.ai_context,
             agent_session_id=session_id,
-            allowed_tools=allowed_tools,
+            allowed_tools=["mcp__draftcircle__write_section_draft"],
         )
 
         drafts = []
@@ -228,15 +229,14 @@ class AIOrchestrator:
                 f"a draft change, use the post_reply tool."
             )
 
-            allowed_tools = [
-                "mcp__draftcircle__propose_revision",
-                "mcp__draftcircle__post_reply",
-            ]
             content_blocks, result_session_id = await self._run_query(
                 prompt=prompt,
                 system_prompt=system_prompt,
                 agent_session_id=agent_session_id,
-                allowed_tools=allowed_tools,
+                allowed_tools=[
+                    "mcp__draftcircle__propose_revision",
+                    "mcp__draftcircle__post_reply",
+                ],
             )
 
             for block in content_blocks:

@@ -72,17 +72,28 @@ class JiraFeaturePlugin(OutputPlugin):
         return json.dumps(adf)
 
     def publish(self, output: str, config: dict[str, Any]) -> str:
-        for key in ("base_url", "project_key", "email", "api_token"):
-            if key not in config:
-                raise ValueError(f"Missing required config key: '{key}'")
+        import os
 
-        base_url = config["base_url"].rstrip("/")
+        base_url = os.environ.get("JIRA_BASE_URL")
+        email = os.environ.get("JIRA_EMAIL")
+        api_token = os.environ.get("JIRA_API_TOKEN")
+
+        for name, val in [
+            ("JIRA_BASE_URL", base_url),
+            ("JIRA_EMAIL", email),
+            ("JIRA_API_TOKEN", api_token),
+        ]:
+            if not val:
+                raise ValueError(f"Missing required environment variable: '{name}'")
+
+        if "project_key" not in config:
+            raise ValueError("Missing required config key: 'project_key'")
+
+        base_url = base_url.rstrip("/")
         project_key = config["project_key"]
         issue_type_id = config.get("issue_type_id", "10001")
         summary = config.get("summary", "DraftCircle Document")
         labels = config.get("labels", [])
-        email = config["email"]
-        api_token = config["api_token"]
 
         adf = json.loads(output)
 

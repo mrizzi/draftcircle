@@ -91,6 +91,12 @@ class TestAssemble:
 
 
 class TestPublish:
+    @pytest.fixture(autouse=True)
+    def _set_jira_env(self, monkeypatch):
+        monkeypatch.setenv("JIRA_BASE_URL", "https://myorg.atlassian.net")
+        monkeypatch.setenv("JIRA_EMAIL", "user@example.com")
+        monkeypatch.setenv("JIRA_API_TOKEN", "secret-token")
+
     def test_creates_jira_issue(self):
         plugin = JiraFeaturePlugin()
         sections = [
@@ -109,13 +115,10 @@ class TestPublish:
             result = plugin.publish(
                 assembled,
                 {
-                    "base_url": "https://myorg.atlassian.net",
                     "project_key": "PROJ",
                     "issue_type_id": "10001",
                     "summary": "New Feature: DraftCircle Test",
                     "labels": ["feature", "draftcircle"],
-                    "email": "user@example.com",
-                    "api_token": "secret-token",
                 },
             )
 
@@ -142,12 +145,7 @@ class TestPublish:
         ) as mock_post:
             plugin.publish(
                 assembled,
-                {
-                    "base_url": "https://myorg.atlassian.net/",
-                    "project_key": "TEST",
-                    "email": "u@e.com",
-                    "api_token": "tok",
-                },
+                {"project_key": "TEST"},
             )
 
         url = mock_post.call_args.args[0]
@@ -168,41 +166,18 @@ class TestPublish:
             with pytest.raises(httpx.HTTPStatusError):
                 plugin.publish(
                     assembled,
-                    {
-                        "base_url": "https://myorg.atlassian.net",
-                        "project_key": "PROJ",
-                        "email": "u@e.com",
-                        "api_token": "tok",
-                    },
+                    {"project_key": "PROJ"},
                 )
 
-    @pytest.mark.parametrize(
-        "missing_key", ["base_url", "project_key", "email", "api_token"]
-    )
-    def test_raises_on_missing_config_key(self, missing_key):
+    def test_raises_on_missing_project_key(self):
         plugin = JiraFeaturePlugin()
         assembled = plugin.assemble([{"title": "T", "content": "C"}])
-        config = {
-            "base_url": "https://x.atlassian.net",
-            "project_key": "P",
-            "email": "u@e.com",
-            "api_token": "tok",
-        }
-        del config[missing_key]
-
-        with pytest.raises(
-            ValueError, match=f"Missing required config key: '{missing_key}'"
-        ):
-            plugin.publish(assembled, config)
+        with pytest.raises(ValueError, match="project_key"):
+            plugin.publish(assembled, {})
 
     def test_raises_on_invalid_json_output(self):
         plugin = JiraFeaturePlugin()
-        config = {
-            "base_url": "https://x.atlassian.net",
-            "project_key": "P",
-            "email": "u@e.com",
-            "api_token": "tok",
-        }
+        config = {"project_key": "P"}
         with pytest.raises(json.JSONDecodeError):
             plugin.publish("not valid json", config)
 
@@ -219,12 +194,7 @@ class TestPublish:
         ) as mock_post:
             plugin.publish(
                 assembled,
-                {
-                    "base_url": "https://x.atlassian.net",
-                    "project_key": "P",
-                    "email": "u@e.com",
-                    "api_token": "tok",
-                },
+                {"project_key": "P"},
             )
 
         payload = mock_post.call_args.kwargs["json"]
@@ -243,10 +213,40 @@ class TestPublish:
             with pytest.raises(httpx.ConnectError):
                 plugin.publish(
                     assembled,
-                    {
-                        "base_url": "https://x.atlassian.net",
-                        "project_key": "P",
-                        "email": "u@e.com",
-                        "api_token": "tok",
-                    },
+                    {"project_key": "P"},
                 )
+
+
+class TestPublishEnvVars:
+    def test_reads_credentials_from_env(self, monkeypatch):
+        monkeypatch.setenv("JIRA_BASE_URL", "https://env.atlassian.net")
+        monkeypatch.setenv("JIRA_EMAIL", "env@example.com")
+        monkeypatch.setenv("JIRA_API_TOKEN", "env-token")
+
+        plugin = JiraFeaturePlugin()
+        assembled = plugin.assemble([{"title": "T", "content": "C"}])
+
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"key": "ENV-1"}
+        mock_response.raise_for_status = MagicMock()
+
+        with patch(
+            "backend.plugins.jira_feature.httpx.post", return_value=mock_response
+        ) as mock_post:
+            result = plugin.publish(assembled, {"project_key": "ENV"})
+
+        assert result == "ENV-1"
+        assert mock_post.call_args.kwargs["auth"] == ("env@example.com", "env-token")
+
+    def test_raises_when_base_url_missing(self):
+        plugin = JiraFeaturePlugin()
+        assembled = plugin.assemble([{"title": "T", "content": "C"}])
+        with pytest.raises(ValueError, match="JIRA_BASE_URL"):
+            plugin.publish(assembled, {"project_key": "P"})
+
+    def test_raises_when_email_missing(self, monkeypatch):
+        monkeypatch.setenv("JIRA_BASE_URL", "https://x.atlassian.net")
+        plugin = JiraFeaturePlugin()
+        assembled = plugin.assemble([{"title": "T", "content": "C"}])
+        with pytest.raises(ValueError, match="JIRA_EMAIL"):
+            plugin.publish(assembled, {"project_key": "P"})

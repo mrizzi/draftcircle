@@ -374,6 +374,9 @@ function showInviteLinks(session) {
 // --- Workspace ---
 
 async function openSession(sessionId) {
+  if (window.location.pathname !== '/session/' + sessionId) {
+    window.history.pushState({}, '', '/session/' + sessionId);
+  }
   state.currentSession = await apiFetch(sessionPath(sessionId));
   state.sectionContent = {};
   state.sectionComments = {};

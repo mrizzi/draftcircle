@@ -274,7 +274,8 @@ async function handleCreateSession(e) {
       }),
     });
     showInviteLinks(session);
-    await loadSessionList();
+    window.history.pushState({}, '', '/session/' + session.id);
+    await openSession(session.id);
   } catch (err) {
     alert('Error: ' + err.message);
   } finally {
@@ -842,6 +843,19 @@ async function handleWsMessage(msg) {
   } else if (msg.type === 'section_assigned') {
     state.currentSession = await apiFetch(sessionPath(sid));
     renderSidebar();
+  } else if (msg.type === 'draft_progress') {
+    const statusEl = document.getElementById('review-status');
+    if (statusEl) {
+      statusEl.textContent = msg.message || 'Generating...';
+      statusEl.style.color = 'var(--primary)';
+    }
+    if (msg.section_id) {
+      state.sectionContent[msg.section_id] = await apiFetch('/sessions/' + sid + '/sections/' + msg.section_id);
+      if (state.activeSection === msg.section_id) renderReviewArea();
+      renderSidebar();
+    }
+  } else if (msg.type === 'drafts_complete') {
+    await openSession(sid);
   }
 }
 

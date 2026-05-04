@@ -106,36 +106,69 @@ def create_app(data_repo_path: str | None = None) -> FastAPI:
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
 
+        result = sessions.get_session(session.id)
+        response = result.model_dump(mode="json")
+
         if req.seed_text and ai:
             template = templates.get_template(req.template)
-            try:
-                drafts, agent_session_id = await ai.generate_drafts(
-                    session_id=session.agent_session_id,
-                    template=template,
-                    seed_content=req.seed_text,
-                )
-                draft_files = {}
-                for draft in drafts:
-                    meta = session.section_meta.get(draft.section_id)
-                    if meta:
-                        section_path = (
-                            f"sessions/{session.id}/sections/{meta.filename}.md"
-                        )
-                        draft_files[section_path] = draft.content
-                if draft_files:
-                    git.commit(
-                        f"draft: AI generated drafts for {session.id}",
-                        draft_files,
-                    )
-                if agent_session_id:
-                    sessions.set_agent_session_id(session.id, agent_session_id)
-            except Exception:
-                logger.warning(
-                    "AI draft generation failed for %s", session.id, exc_info=True
-                )
 
-        session = sessions.get_session(session.id)
-        return session.model_dump(mode="json")
+            async def generate_drafts_background():
+                try:
+                    await ws_manager.broadcast(
+                        session.id,
+                        {"type": "draft_progress", "message": "Generating drafts..."},
+                    )
+                    drafts, agent_session_id = await ai.generate_drafts(
+                        session_id=session.agent_session_id,
+                        template=template,
+                        seed_content=req.seed_text,
+                    )
+                    draft_files = {}
+                    for draft in drafts:
+                        meta = session.section_meta.get(draft.section_id)
+                        if meta:
+                            section_path = (
+                                f"sessions/{session.id}/sections/{meta.filename}.md"
+                            )
+                            draft_files[section_path] = draft.content
+                            await ws_manager.broadcast(
+                                session.id,
+                                {
+                                    "type": "draft_progress",
+                                    "message": f"Drafted: {draft.section_id}",
+                                    "section_id": draft.section_id,
+                                },
+                            )
+                    if draft_files:
+                        git.commit(
+                            f"draft: AI generated drafts for {session.id}",
+                            draft_files,
+                        )
+                    if agent_session_id:
+                        sessions.set_agent_session_id(session.id, agent_session_id)
+                    await ws_manager.broadcast(
+                        session.id,
+                        {"type": "drafts_complete"},
+                    )
+                except Exception:
+                    logger.warning(
+                        "AI draft generation failed for %s",
+                        session.id,
+                        exc_info=True,
+                    )
+                    await ws_manager.broadcast(
+                        session.id,
+                        {
+                            "type": "draft_progress",
+                            "message": "Draft generation failed",
+                        },
+                    )
+
+            import asyncio
+
+            asyncio.create_task(generate_drafts_background())
+
+        return response
 
     def _strip_tokens(session_data: dict) -> dict:
         for p in session_data.get("participants", []):

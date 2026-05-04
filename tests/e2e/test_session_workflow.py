@@ -2,7 +2,7 @@
 import pytest
 from playwright.sync_api import expect
 
-from tests.e2e.conftest import WS_TIMEOUT, close_panel, open_section, wait_for_workspace
+from tests.e2e.conftest import WS_TIMEOUT, open_section, wait_for_workspace
 
 pytestmark = pytest.mark.e2e
 
@@ -17,12 +17,12 @@ class TestSessionWorkflow:
         wait_for_workspace(page)
 
         # Verify section grid shows all 3 sections
-        expect(page.locator(".section-card")).to_have_count(3)
+        expect(page.locator(".sidebar-item")).to_have_count(3)
 
         open_section(page, "overview")
 
         # Verify draft content is visible (rendered markdown inside .draft-content)
-        expect(page.locator("#panel-draft .draft-content")).to_contain_text("Overview")
+        expect(page.locator("#review-draft .draft-content")).to_contain_text("Overview")
 
         # Post a comment
         page.fill("#comment-input", "Needs more detail here.")
@@ -43,37 +43,27 @@ class TestSessionWorkflow:
         )
 
         # Approve overview section
-        page.click("#panel-approve-btn")
+        page.click("#review-approve-btn")
         # Wait for section status to update via WebSocket
         expect(
-            page.locator(
-                '.section-card[data-section="overview"] .section-card-header .badge'
-            )
+            page.locator('.sidebar-item[data-section="overview"] .badge')
         ).to_have_text("approved", timeout=WS_TIMEOUT)
 
-        close_panel(page)
         open_section(page, "details")
 
         # Approve details
-        page.click("#panel-approve-btn")
+        page.click("#review-approve-btn")
         expect(
-            page.locator(
-                '.section-card[data-section="details"] .section-card-header .badge'
-            )
+            page.locator('.sidebar-item[data-section="details"] .badge')
         ).to_have_text("approved", timeout=WS_TIMEOUT)
 
-        close_panel(page)
         open_section(page, "notes")
 
         # Skip notes (priority=optional so skip button is visible)
-        page.click("#panel-skip-btn")
-        expect(
-            page.locator(
-                '.section-card[data-section="notes"] .section-card-header .badge'
-            )
-        ).to_have_text("skipped", timeout=WS_TIMEOUT)
-
-        close_panel(page)
+        page.click("#review-skip-btn")
+        expect(page.locator('.sidebar-item[data-section="notes"] .badge')).to_have_text(
+            "skipped", timeout=WS_TIMEOUT
+        )
 
         # Publish -- handle both confirm() and alert() dialogs
         page.on("dialog", lambda d: d.accept())
@@ -93,7 +83,7 @@ class TestSessionWorkflow:
         open_section(page, "overview")
 
         # Get current draft text
-        draft_text = page.locator("#panel-draft .draft-content").text_content()
+        draft_text = page.locator("#review-draft .draft-content").text_content()
 
         # Comment and wait for proposal
         page.fill("#comment-input", "Maybe change this?")
@@ -109,7 +99,7 @@ class TestSessionWorkflow:
         )
 
         # Draft unchanged
-        expect(page.locator("#panel-draft .draft-content")).to_have_text(draft_text)
+        expect(page.locator("#review-draft .draft-content")).to_have_text(draft_text)
 
     def test_reopen_section(self, page, base_url, create_session_via_api):
         """Approving and then reopening a section should restore it to draft status."""
@@ -121,20 +111,16 @@ class TestSessionWorkflow:
 
         open_section(page, "overview")
 
-        page.click("#panel-approve-btn")
+        page.click("#review-approve-btn")
         expect(
-            page.locator(
-                '.section-card[data-section="overview"] .section-card-header .badge'
-            )
+            page.locator('.sidebar-item[data-section="overview"] .badge')
         ).to_have_text("approved", timeout=WS_TIMEOUT)
 
         # Reopen button should appear after approval
-        expect(page.locator("#panel-reopen-btn")).to_be_visible(timeout=WS_TIMEOUT)
-        page.click("#panel-reopen-btn")
+        expect(page.locator("#review-reopen-btn")).to_be_visible(timeout=WS_TIMEOUT)
+        page.click("#review-reopen-btn")
 
         # Section should return to in-review status (reopen transitions to in-review)
         expect(
-            page.locator(
-                '.section-card[data-section="overview"] .section-card-header .badge'
-            )
+            page.locator('.sidebar-item[data-section="overview"] .badge')
         ).to_have_text("in-review", timeout=WS_TIMEOUT)

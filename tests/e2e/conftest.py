@@ -26,13 +26,10 @@ def wait_for_workspace(page):
 
 
 def open_section(page, section_id):
-    page.locator(f'.section-card[data-section="{section_id}"]').click()
-    page.wait_for_selector("#detail-panel.panel-visible")
-
-
-def close_panel(page):
-    page.click("#panel-close-btn")
-    page.wait_for_selector("#detail-panel:not(.panel-visible)")
+    page.locator(f'.sidebar-item[data-section="{section_id}"]').click()
+    expect(page.locator(f'.sidebar-item[data-section="{section_id}"]')).to_have_class(
+        "sidebar-item active", timeout=5000
+    )
 
 
 def _find_free_port():

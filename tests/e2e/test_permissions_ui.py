@@ -3,7 +3,7 @@ import httpx
 import pytest
 from playwright.sync_api import expect
 
-from tests.e2e.conftest import WS_TIMEOUT, close_panel, open_section, wait_for_workspace
+from tests.e2e.conftest import WS_TIMEOUT, open_section, wait_for_workspace
 
 pytestmark = pytest.mark.e2e
 
@@ -93,8 +93,7 @@ class TestSectionActionPermissions:
         for section_id in ("overview", "details", "notes"):
             open_section(page, section_id)
             # Approve button uses display:inline-block vs display:none
-            expect(page.locator("#panel-approve-btn")).to_be_visible()
-            close_panel(page)
+            expect(page.locator("#review-approve-btn")).to_be_visible()
 
     def test_owner_sees_approve_on_own_section(
         self, page, base_url, create_session_via_api
@@ -108,17 +107,15 @@ class TestSectionActionPermissions:
 
         # Bob's section (overview) -- approve visible
         open_section(page, "overview")
-        expect(page.locator("#panel-approve-btn")).to_be_visible()
-        close_panel(page)
+        expect(page.locator("#review-approve-btn")).to_be_visible()
 
         # Carol's section (details) -- approve hidden for bob
         open_section(page, "details")
-        expect(page.locator("#panel-approve-btn")).to_be_hidden()
-        close_panel(page)
+        expect(page.locator("#review-approve-btn")).to_be_hidden()
 
         # Unassigned section (notes) -- approve hidden for bob
         open_section(page, "notes")
-        expect(page.locator("#panel-approve-btn")).to_be_hidden()
+        expect(page.locator("#review-approve-btn")).to_be_hidden()
 
     def test_skip_only_on_non_required_sections(
         self, page, base_url, create_session_via_api
@@ -132,17 +129,15 @@ class TestSectionActionPermissions:
 
         # overview is required -- no skip
         open_section(page, "overview")
-        expect(page.locator("#panel-skip-btn")).to_be_hidden()
-        close_panel(page)
+        expect(page.locator("#review-skip-btn")).to_be_hidden()
 
         # details is recommended -- skip visible
         open_section(page, "details")
-        expect(page.locator("#panel-skip-btn")).to_be_visible()
-        close_panel(page)
+        expect(page.locator("#review-skip-btn")).to_be_visible()
 
         # notes is optional -- skip visible
         open_section(page, "notes")
-        expect(page.locator("#panel-skip-btn")).to_be_visible()
+        expect(page.locator("#review-skip-btn")).to_be_visible()
 
     def test_reopen_visible_only_after_approval(
         self, page, base_url, create_session_via_api
@@ -157,14 +152,14 @@ class TestSectionActionPermissions:
         open_section(page, "overview")
 
         # Before approval -- reopen hidden
-        expect(page.locator("#panel-reopen-btn")).to_be_hidden()
+        expect(page.locator("#review-reopen-btn")).to_be_hidden()
 
         # Approve the section
-        page.click("#panel-approve-btn")
-        expect(page.locator("#panel-reopen-btn")).to_be_visible(timeout=WS_TIMEOUT)
+        page.click("#review-approve-btn")
+        expect(page.locator("#review-reopen-btn")).to_be_visible(timeout=WS_TIMEOUT)
 
         # Approve button should now be hidden (status is approved)
-        expect(page.locator("#panel-approve-btn")).to_be_hidden()
+        expect(page.locator("#review-approve-btn")).to_be_hidden()
 
 
 class TestPublishedSessionPermissions:
@@ -200,14 +195,13 @@ class TestPublishedSessionPermissions:
 
         # Check an approved section -- approve and skip hidden
         open_section(page, "overview")
-        expect(page.locator("#panel-approve-btn")).to_be_hidden()
-        expect(page.locator("#panel-skip-btn")).to_be_hidden()
-        close_panel(page)
+        expect(page.locator("#review-approve-btn")).to_be_hidden()
+        expect(page.locator("#review-skip-btn")).to_be_hidden()
 
         # Check a skipped section -- approve and skip hidden
         open_section(page, "notes")
-        expect(page.locator("#panel-approve-btn")).to_be_hidden()
-        expect(page.locator("#panel-skip-btn")).to_be_hidden()
+        expect(page.locator("#review-approve-btn")).to_be_hidden()
+        expect(page.locator("#review-skip-btn")).to_be_hidden()
 
     def test_published_session_comment_input_disabled_for_approved(
         self, page, base_url, e2e_data_dir, create_session_via_api

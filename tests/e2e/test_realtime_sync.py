@@ -54,12 +54,10 @@ class TestRealtimeSync:
         wait_for_workspace(bob_page)
 
         open_section(page, "overview")
-        page.click("#panel-approve-btn")
+        page.click("#review-approve-btn")
 
         expect(
-            bob_page.locator(
-                '.section-card[data-section="overview"] .section-card-header .badge'
-            )
+            bob_page.locator('.sidebar-item[data-section="overview"] .badge')
         ).to_have_text("approved", timeout=WS_TIMEOUT)
 
     def test_publish_updates_all_browsers(

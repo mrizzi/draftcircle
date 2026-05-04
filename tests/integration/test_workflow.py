@@ -125,9 +125,7 @@ class TestFullLifecycle:
         assert session["progress"]["required_remaining"] == 0
 
         # Publish — markdown plugin writes to file
-        output_path = str(
-            session_with_drafts["session"]["id"] + "-output.md"
-        )
+        output_path = str(session_with_drafts["session"]["id"] + "-output.md")
         data_repo = api.app.state.data_repo_path
         resp = api.post(
             f"/api/sessions/{sid}/publish",
@@ -295,18 +293,17 @@ class TestGitPersistence:
 class TestPluginIntegration:
     def test_custom_plugin_overrides_builtin(self, api, integration_app):
         data_repo = integration_app.state.data_repo_path
-        git = integration_app.state.git
 
         # Write a custom markdown.py plugin that returns a unique ref
         plugins_dir = data_repo / "plugins"
         plugins_dir.mkdir(exist_ok=True)
         (plugins_dir / "markdown.py").write_text(
-            'from backend.plugins.base import OutputPlugin\n'
-            '\n'
-            'class Plugin(OutputPlugin):\n'
-            '    def assemble(self, sections):\n'
+            "from backend.plugins.base import OutputPlugin\n"
+            "\n"
+            "class Plugin(OutputPlugin):\n"
+            "    def assemble(self, sections):\n"
             '        return "custom-assembled"\n'
-            '    def publish(self, output, config):\n'
+            "    def publish(self, output, config):\n"
             '        return "custom-override-ref"\n'
         )
 
@@ -328,8 +325,12 @@ class TestPluginIntegration:
         )
         sid = resp.json()["id"]
 
-        api.post(f"/api/sessions/{sid}/sections/overview/approve", json={"user_id": "alice"})
-        api.post(f"/api/sessions/{sid}/sections/details/approve", json={"user_id": "alice"})
+        api.post(
+            f"/api/sessions/{sid}/sections/overview/approve", json={"user_id": "alice"}
+        )
+        api.post(
+            f"/api/sessions/{sid}/sections/details/approve", json={"user_id": "alice"}
+        )
         api.post(f"/api/sessions/{sid}/sections/notes/skip", json={"user_id": "alice"})
 
         resp = api.post(

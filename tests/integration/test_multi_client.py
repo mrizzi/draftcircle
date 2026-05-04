@@ -31,7 +31,9 @@ class TestThreeClientBroadcast:
 
         with api.websocket_connect(f"/ws/sessions/{sid}?token={t['alice']}") as ws_a:
             with api.websocket_connect(f"/ws/sessions/{sid}?token={t['bob']}") as ws_b:
-                with api.websocket_connect(f"/ws/sessions/{sid}?token={t['carol']}") as ws_c:
+                with api.websocket_connect(
+                    f"/ws/sessions/{sid}?token={t['carol']}"
+                ) as ws_c:
                     drain_join_messages(ws_a, ws_b, ws_c)
 
                     api.post(
@@ -55,7 +57,9 @@ class TestThreeClientBroadcast:
 
         with api.websocket_connect(f"/ws/sessions/{sid}?token={t['alice']}") as ws_a:
             with api.websocket_connect(f"/ws/sessions/{sid}?token={t['bob']}") as ws_b:
-                with api.websocket_connect(f"/ws/sessions/{sid}?token={t['carol']}") as ws_c:
+                with api.websocket_connect(
+                    f"/ws/sessions/{sid}?token={t['carol']}"
+                ) as ws_c:
                     drain_join_messages(ws_a, ws_b, ws_c)
 
                     api.post(
@@ -93,7 +97,9 @@ class TestThreeClientBroadcast:
 
         with api.websocket_connect(f"/ws/sessions/{sid}?token={t['alice']}") as ws_a:
             with api.websocket_connect(f"/ws/sessions/{sid}?token={t['bob']}") as ws_b:
-                with api.websocket_connect(f"/ws/sessions/{sid}?token={t['carol']}") as ws_c:
+                with api.websocket_connect(
+                    f"/ws/sessions/{sid}?token={t['carol']}"
+                ) as ws_c:
                     drain_join_messages(ws_a, ws_b, ws_c)
 
                     api.post(
@@ -112,7 +118,9 @@ class TestThreeClientBroadcast:
 
         with api.websocket_connect(f"/ws/sessions/{sid}?token={t['alice']}") as ws_a:
             with api.websocket_connect(f"/ws/sessions/{sid}?token={t['bob']}") as ws_b:
-                with api.websocket_connect(f"/ws/sessions/{sid}?token={t['carol']}") as ws_c:
+                with api.websocket_connect(
+                    f"/ws/sessions/{sid}?token={t['carol']}"
+                ) as ws_c:
                     drain_join_messages(ws_a, ws_b, ws_c)
 
                     api.post(
@@ -130,13 +138,19 @@ class TestThreeClientBroadcast:
         t = session_with_drafts["tokens"]
         data_repo = api.app.state.data_repo_path
 
-        api.post(f"/api/sessions/{sid}/sections/overview/approve", json={"user_id": "alice"})
-        api.post(f"/api/sessions/{sid}/sections/details/approve", json={"user_id": "alice"})
+        api.post(
+            f"/api/sessions/{sid}/sections/overview/approve", json={"user_id": "alice"}
+        )
+        api.post(
+            f"/api/sessions/{sid}/sections/details/approve", json={"user_id": "alice"}
+        )
         api.post(f"/api/sessions/{sid}/sections/notes/skip", json={"user_id": "alice"})
 
         with api.websocket_connect(f"/ws/sessions/{sid}?token={t['alice']}") as ws_a:
             with api.websocket_connect(f"/ws/sessions/{sid}?token={t['bob']}") as ws_b:
-                with api.websocket_connect(f"/ws/sessions/{sid}?token={t['carol']}") as ws_c:
+                with api.websocket_connect(
+                    f"/ws/sessions/{sid}?token={t['carol']}"
+                ) as ws_c:
                     drain_join_messages(ws_a, ws_b, ws_c)
 
                     api.post(
@@ -164,7 +178,9 @@ class TestThreeClientBroadcast:
                 ws_a.receive_json()  # bob joined
                 ws_b.receive_json()  # bob joined
 
-                with api.websocket_connect(f"/ws/sessions/{sid}?token={t['carol']}") as ws_c:
+                with api.websocket_connect(
+                    f"/ws/sessions/{sid}?token={t['carol']}"
+                ) as ws_c:
                     ws_a.receive_json()  # carol joined
                     ws_b.receive_json()  # carol joined
                     ws_c.receive_json()  # carol joined
@@ -190,7 +206,9 @@ class TestThreeClientBroadcast:
                 ws_a.receive_json()  # bob joined
                 ws_b.receive_json()  # bob joined
 
-                with api.websocket_connect(f"/ws/sessions/{sid}?token={t['carol']}") as ws_c:
+                with api.websocket_connect(
+                    f"/ws/sessions/{sid}?token={t['carol']}"
+                ) as ws_c:
                     ws_a.receive_json()  # carol joined
                     ws_b.receive_json()  # carol joined
                     ws_c.receive_json()  # carol joined

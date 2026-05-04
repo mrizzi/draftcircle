@@ -8,9 +8,7 @@ pytestmark = pytest.mark.e2e
 
 
 class TestSessionWorkflow:
-    def test_full_lifecycle_through_ui(
-        self, page, base_url, create_session_via_api
-    ):
+    def test_full_lifecycle_through_ui(self, page, base_url, create_session_via_api):
         """Walk through the complete session lifecycle in a single browser."""
         session = create_session_via_api()
         sid, tokens = session["id"], session["tokens"]
@@ -84,9 +82,7 @@ class TestSessionWorkflow:
         # Wait for published state -- button should become disabled
         expect(page.locator("#publish-btn")).to_be_disabled(timeout=WS_TIMEOUT)
 
-    def test_reject_proposal_keeps_draft(
-        self, page, base_url, create_session_via_api
-    ):
+    def test_reject_proposal_keeps_draft(self, page, base_url, create_session_via_api):
         """Rejecting a proposal should leave the draft unchanged."""
         session = create_session_via_api()
         sid, tokens = session["id"], session["tokens"]

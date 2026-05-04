@@ -41,8 +41,12 @@ class TestConcurrentProposals:
         proposals = api.get(f"/api/sessions/{sid}/sections/overview/proposals").json()
         p1_id, p2_id = proposals[0]["id"], proposals[1]["id"]
 
-        api.post(f"/api/sessions/{sid}/proposals/{p1_id}/accept", json={"user_id": "bob"})
-        api.post(f"/api/sessions/{sid}/proposals/{p2_id}/reject", json={"user_id": "bob"})
+        api.post(
+            f"/api/sessions/{sid}/proposals/{p1_id}/accept", json={"user_id": "bob"}
+        )
+        api.post(
+            f"/api/sessions/{sid}/proposals/{p2_id}/reject", json={"user_id": "bob"}
+        )
 
         proposals = api.get(f"/api/sessions/{sid}/sections/overview/proposals").json()
         statuses = {p["id"]: p["status"] for p in proposals}

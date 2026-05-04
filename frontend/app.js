@@ -235,20 +235,37 @@ async function handleCreateSession(e) {
   const slug = document.getElementById('template-select').value;
   const seedText = document.getElementById('seed-text').value.trim();
 
-  const rows = document.getElementById('participants-list').children;
-  const participants = Array.from(rows).map(row => ({
-    user_id: row.querySelector('.participant-user').value,
-    role: row.querySelector('.participant-role').value || 'participant',
-    assigned_sections: row.querySelector('.participant-sections').value
-      .split(',').map(s => s.trim()).filter(Boolean),
-  }));
+  const template = state.templates.find(t => (t.slug || t.name) === slug);
+  const coordinatorId = state.userId || 'coordinator';
+
+  const assignments = {};
+  document.querySelectorAll('.section-owner-select').forEach(sel => {
+    const sectionId = sel.dataset.sectionId;
+    let userId = sel.value;
+    if (!userId) {
+      const sectionDef = template && template.sections.find(s => s.id === sectionId);
+      if (sectionDef && sectionDef.priority === 'required') {
+        userId = coordinatorId;
+      }
+    }
+    if (userId) {
+      if (!assignments[userId]) assignments[userId] = [];
+      assignments[userId].push(sectionId);
+    }
+  });
+
+  const participants = Object.entries(assignments).map(([userId, sections]) => {
+    const user = state.users.find(u => u.id === userId);
+    const role = (user && user.default_roles && user.default_roles[0]) || 'participant';
+    return { user_id: userId, assigned_sections: sections, role };
+  });
 
   try {
     const session = await apiFetch('/sessions', {
       method: 'POST',
       body: JSON.stringify({
         template: slug,
-        coordinator: state.userId || 'coordinator',
+        coordinator: coordinatorId,
         participants: participants,
         seed_text: seedText || undefined,
       }),

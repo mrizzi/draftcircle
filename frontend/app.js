@@ -286,7 +286,9 @@ async function openSession(sessionId) {
 function updateHeader() {
   const s = state.currentSession;
   if (!s) return;
-  document.getElementById('session-info').textContent = s.id + ' — ' + s.template;
+  const info = s.id + ' — ' + s.template;
+  document.getElementById('session-info').textContent =
+    state.userId ? info + ' · logged in as ' + state.userId : info;
 
   const p = s.progress;
   let progressText = p.approved + '/' + p.total + ' approved';

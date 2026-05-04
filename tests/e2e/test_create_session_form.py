@@ -57,6 +57,51 @@ class TestCreateSessionForm:
             "view active", timeout=WORKSPACE_TIMEOUT
         )
 
+    def test_button_shows_progress_during_draft_generation(self, page, base_url):
+        page.goto(base_url)
+        page.click("#create-session-btn")
+        expect(page.locator(".section-owner-row")).to_have_count(3)
+
+        page.fill("#seed-text", "Generate drafts for progress test.")
+
+        submit_btn = page.locator('button[type="submit"]')
+        progress_texts = []
+
+        def capture_mutations():
+            return page.evaluate("""() => {
+                return new Promise(resolve => {
+                    const btn = document.querySelector('#create-session-form button[type="submit"]');
+                    const texts = [];
+                    const observer = new MutationObserver(() => {
+                        const t = btn.textContent.trim();
+                        if (t && (texts.length === 0 || texts[texts.length - 1] !== t)) {
+                            texts.push(t);
+                        }
+                    });
+                    observer.observe(btn, { childList: true, characterData: true, subtree: true });
+                    btn.click();
+                    // Wait for the button to return to normal (form submission completes)
+                    const check = setInterval(() => {
+                        if (btn.textContent.trim() === 'Create Session' && texts.length > 1) {
+                            clearInterval(check);
+                            observer.disconnect();
+                            resolve(texts);
+                        }
+                    }, 200);
+                    // Timeout after 60s
+                    setTimeout(() => { clearInterval(check); observer.disconnect(); resolve(texts); }, 60000);
+                });
+            }""")
+
+        progress_texts = capture_mutations()
+
+        assert len(progress_texts) >= 2, (
+            f"Expected progress updates, got: {progress_texts}"
+        )
+        assert any("Generating" in t or "Drafted" in t for t in progress_texts), (
+            f"No draft progress message found in: {progress_texts}"
+        )
+
     def test_required_unassigned_auto_assigns_to_coordinator(self, page, base_url):
         page.goto(base_url)
         page.click("#create-session-btn")

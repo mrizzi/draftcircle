@@ -4,6 +4,13 @@ import pygit2
 import pytest
 
 
+def pytest_collection_modifyitems(items):
+    """Run E2E tests last to avoid event loop conflicts with async unit tests."""
+    e2e_tests = [i for i in items if "e2e" in str(i.fspath)]
+    other_tests = [i for i in items if "e2e" not in str(i.fspath)]
+    items[:] = other_tests + e2e_tests
+
+
 @pytest.fixture()
 def data_repo(tmp_path):
     repo_path = tmp_path / "data"

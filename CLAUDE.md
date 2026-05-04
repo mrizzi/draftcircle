@@ -107,10 +107,10 @@ and backend technology stack.
 
 ```bash
 # Install dependencies
-pip install fastapi uvicorn pygit2 anthropic
+pip install -e ".[dev]"
 
 # Run the backend (serves frontend static files too)
-DRAFTCIRCLE_DATA_REPO=/path/to/data-repo uvicorn backend.main:app --reload --port 8000
+DRAFTCIRCLE_DATA_REPO=/path/to/data-repo uvicorn backend.main:create_app --factory --reload --port 8000
 
 # Run tests
 pytest tests/

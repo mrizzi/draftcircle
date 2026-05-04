@@ -144,7 +144,7 @@ class AIOrchestrator:
         content_blocks: list = []
         session_id: str | None = None
 
-        async for message in query(prompt, opts):
+        async for message in query(prompt=prompt, options=opts):
             if isinstance(message, AssistantMessage):
                 for block in message.content:
                     content_blocks.append(block)

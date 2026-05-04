@@ -134,8 +134,8 @@ class TestGenerateDrafts:
             )
 
             call_args = mock_query.call_args
-            prompt = call_args[0][0]
-            opts = call_args[0][1]
+            prompt = call_args.kwargs["prompt"]
+            opts = call_args.kwargs["options"]
 
             assert "Seed material here" in prompt
             assert "overview" in prompt.lower()
@@ -243,7 +243,7 @@ class TestProcessComment:
             )
 
             call_args = mock_query.call_args
-            prompt = call_args[0][0]
+            prompt = call_args.kwargs["prompt"]
             assert "First comment" in prompt
             assert "New comment" in prompt
 
@@ -312,7 +312,7 @@ class TestProcessComment:
             )
 
             call_args = mock_query.call_args
-            opts = call_args[0][1]
+            opts = call_args.kwargs["options"]
             assert opts.resume == "existing-session-42"
 
     @pytest.mark.asyncio
@@ -320,7 +320,7 @@ class TestProcessComment:
         orchestrator = AIOrchestrator()
         call_order = []
 
-        def slow_query(prompt, opts):
+        def slow_query(**kwargs):
             async def _gen():
                 call_order.append("start")
                 await asyncio.sleep(0.05)

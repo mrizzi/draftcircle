@@ -315,6 +315,20 @@ function showInviteLinks(session) {
     list.appendChild(item);
   });
 
+  const copyAllBtn = document.createElement('button');
+  copyAllBtn.className = 'btn btn-primary';
+  copyAllBtn.textContent = 'Copy All';
+  copyAllBtn.style.marginTop = '0.75rem';
+  copyAllBtn.addEventListener('click', () => {
+    const allLinks = session.participants.map(p =>
+      p.user_id + ' (' + p.role + '): ' + base + '/session/' + session.id + '?token=' + p.token
+    ).join('\n');
+    navigator.clipboard.writeText(allLinks);
+    copyAllBtn.textContent = 'Copied!';
+    setTimeout(() => { copyAllBtn.textContent = 'Copy All'; }, 1500);
+  });
+  list.appendChild(copyAllBtn);
+
   document.getElementById('invite-modal').style.display = 'flex';
 }
 

@@ -32,6 +32,9 @@
     <div id="view-create-session" class="view">
       <h2>Create New Session</h2>
       <form id="create-session-form">
+        <label for="coordinator-select">You are</label>
+        <select id="coordinator-select" required></select>
+
         <label for="template-select">Template</label>
         <select id="template-select" required></select>
 
@@ -110,8 +113,8 @@
           <input id="publish-labels" type="text" placeholder="e.g. feature, draftcircle">
         </div>
         <div id="publish-markdown-fields" style="display:none">
-          <label for="publish-output-path">Output Path</label>
-          <input id="publish-output-path" type="text" placeholder="/tmp/output.md">
+          <label for="publish-filename">Filename</label>
+          <input id="publish-filename" type="text" placeholder="document.md">
         </div>
         <div class="form-actions">
           <button type="button" id="cancel-publish-btn" class="btn btn-secondary">Cancel</button>

@@ -124,6 +124,15 @@ function renderSessionList() {
 // --- Session Creation ---
 
 function showCreateForm() {
+  const coordSelect = document.getElementById('coordinator-select');
+  coordSelect.textContent = '';
+  state.users.forEach(u => {
+    const opt = document.createElement('option');
+    opt.value = u.id;
+    opt.textContent = u.name + ' (' + u.id + ')';
+    coordSelect.appendChild(opt);
+  });
+
   const select = document.getElementById('template-select');
   select.textContent = '';
   state.templates.forEach(t => {
@@ -239,7 +248,7 @@ async function handleCreateSession(e) {
   const seedText = document.getElementById('seed-text').value.trim();
 
   const template = state.templates.find(t => (t.slug || t.name) === slug);
-  const coordinatorId = state.userId || 'coordinator';
+  const coordinatorId = document.getElementById('coordinator-select').value;
 
   const assignments = {};
   document.querySelectorAll('.section-owner-select').forEach(sel => {
@@ -451,7 +460,9 @@ function renderSidebar() {
 
   Object.entries(s.section_meta).forEach(([sid, meta]) => {
     const sectionDef = template ? template.sections.find(sec => sec.id === sid) : null;
-    const owner = (s.participants || []).find(p => p.assigned_sections.includes(sid));
+    const participants = s.participants || [];
+    const owner = participants.find(p => p.role !== 'coordinator' && p.assigned_sections.includes(sid))
+      || participants.find(p => p.assigned_sections.includes(sid));
     const pendingCount = (state.sectionProposals[sid] || []).filter(p => p.status === 'pending').length;
 
     const item = document.createElement('div');
@@ -500,7 +511,9 @@ function selectSection(sectionId) {
 function showOwnerDropdown(sectionId, container) {
   if (container.querySelector('select')) return;
   const s = state.currentSession;
-  const currentOwner = (s.participants || []).find(p => p.assigned_sections.includes(sectionId));
+  const participants = s.participants || [];
+  const currentOwner = participants.find(p => p.role !== 'coordinator' && p.assigned_sections.includes(sectionId))
+    || participants.find(p => p.assigned_sections.includes(sectionId));
 
   const sel = document.createElement('select');
   const emptyOpt = document.createElement('option');
@@ -822,7 +835,7 @@ function showPublishModal() {
   if (isJira) {
     document.getElementById('publish-summary').value = state.currentSession.id;
   } else {
-    document.getElementById('publish-output-path').value = '/tmp/draftcircle-' + state.currentSession.id + '.md';
+    document.getElementById('publish-filename').value = state.currentSession.id + '.md';
   }
 
   document.getElementById('publish-modal').style.display = 'flex';
@@ -833,34 +846,63 @@ async function handlePublish(e) {
   const template = findTemplate();
   const isJira = template && template.output_plugin === 'jira';
 
-  let config;
+  const submitBtn = e.target.querySelector('button[type="submit"]');
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'Publishing…';
+
   if (isJira) {
     const projectKey = document.getElementById('publish-project-key').value.trim();
     const summary = document.getElementById('publish-summary').value.trim();
     const labelsRaw = document.getElementById('publish-labels').value.trim();
     const labels = labelsRaw ? labelsRaw.split(',').map(l => l.trim()).filter(Boolean) : [];
-    config = { project_key: projectKey, summary: summary || state.currentSession.id, labels };
+    const config = { project_key: projectKey, summary: summary || state.currentSession.id, labels };
+
+    try {
+      const result = await apiFetch('/sessions/' + state.currentSession.id + '/publish', {
+        method: 'POST',
+        body: JSON.stringify({ config }),
+      });
+      document.getElementById('publish-modal').style.display = 'none';
+      alert('Published. Reference: ' + result.output_ref);
+      await openSession(state.currentSession.id);
+    } catch (err) {
+      alert('Error: ' + err.message);
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Publish';
+    }
   } else {
-    config = { output_path: document.getElementById('publish-output-path').value.trim() };
-  }
+    const filename = document.getElementById('publish-filename').value.trim() || state.currentSession.id + '.md';
+    const config = { filename };
 
-  const submitBtn = e.target.querySelector('button[type="submit"]');
-  submitBtn.disabled = true;
-  submitBtn.textContent = 'Publishing…';
+    try {
+      const resp = await fetch(API + '/sessions/' + state.currentSession.id + '/publish', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ config }),
+      });
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({ detail: resp.statusText }));
+        throw new Error(err.detail || resp.statusText);
+      }
+      const blob = await resp.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
 
-  try {
-    const result = await apiFetch('/sessions/' + state.currentSession.id + '/publish', {
-      method: 'POST',
-      body: JSON.stringify({ config }),
-    });
-    document.getElementById('publish-modal').style.display = 'none';
-    alert('Published. Reference: ' + result.output_ref);
-    await openSession(state.currentSession.id);
-  } catch (err) {
-    alert('Error: ' + err.message);
-  } finally {
-    submitBtn.disabled = false;
-    submitBtn.textContent = 'Publish';
+      document.getElementById('publish-modal').style.display = 'none';
+      await openSession(state.currentSession.id);
+    } catch (err) {
+      alert('Error: ' + err.message);
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Publish';
+    }
   }
 }
 

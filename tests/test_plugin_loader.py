@@ -79,3 +79,11 @@ class TestJiraPluginLoading:
     def test_loads_jira_feature_plugin(self):
         plugin = load_plugin("jira_feature")
         assert isinstance(plugin, JiraFeaturePlugin)
+
+
+class TestPluginDownloadFlag:
+    def test_default_download_is_false(self):
+        from backend.plugins.jira_feature import JiraFeaturePlugin
+
+        plugin = JiraFeaturePlugin()
+        assert plugin.download is False

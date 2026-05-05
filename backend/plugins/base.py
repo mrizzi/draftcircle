@@ -5,6 +5,8 @@ from backend.models import SectionContent
 
 
 class OutputPlugin(ABC):
+    download: bool = False
+
     @abstractmethod
     def assemble(self, sections: list[SectionContent]) -> str: ...
 

@@ -533,6 +533,7 @@ function showOwnerDropdown(sectionId, container) {
   container.appendChild(sel);
   sel.focus();
 
+  let changed = false;
   sel.addEventListener('change', async () => {
     const userId = sel.value;
     if (!userId) return;
@@ -541,13 +542,17 @@ function showOwnerDropdown(sectionId, container) {
         method: 'POST',
         body: JSON.stringify({ user_id: userId }),
       });
+      changed = true;
+      container.textContent = userId;
     } catch (err) {
       alert('Error: ' + err.message);
     }
   });
 
   sel.addEventListener('blur', () => {
-    container.textContent = currentOwner ? currentOwner.user_id : '— unassigned —';
+    if (!changed) {
+      container.textContent = currentOwner ? currentOwner.user_id : '— unassigned —';
+    }
   });
 }
 

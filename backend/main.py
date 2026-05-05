@@ -396,6 +396,10 @@ def create_app(data_repo_path: str | None = None) -> FastAPI:
         session = sessions.get_session(session_id)
         if session is None:
             raise HTTPException(status_code=404, detail="Session not found")
+        if users.get_user(req.user_id) is None:
+            raise HTTPException(
+                status_code=400, detail=f"User '{req.user_id}' not found"
+            )
         try:
             sessions.assign_section(session_id, section_id, req.user_id)
         except ValueError as e:

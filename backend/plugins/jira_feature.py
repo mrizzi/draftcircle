@@ -114,7 +114,12 @@ class JiraFeaturePlugin(OutputPlugin):
             headers={"Accept": "application/json"},
             timeout=30,
         )
-        resp.raise_for_status()
+        try:
+            resp.raise_for_status()
+        except httpx.HTTPStatusError:
+            raise ValueError(
+                f"Jira API returned {resp.status_code}: {resp.text[:200]}"
+            ) from None
         issue_key = resp.json()["key"]
         return issue_key
 

@@ -156,6 +156,8 @@ class TestPublish:
         assembled = plugin.assemble([{"title": "T", "content": "C"}])
 
         mock_response = MagicMock()
+        mock_response.status_code = 400
+        mock_response.text = "Bad Request"
         mock_response.raise_for_status.side_effect = httpx.HTTPStatusError(
             "Bad Request", request=MagicMock(), response=MagicMock()
         )
@@ -163,7 +165,7 @@ class TestPublish:
         with patch(
             "backend.plugins.jira_feature.httpx.post", return_value=mock_response
         ):
-            with pytest.raises(httpx.HTTPStatusError):
+            with pytest.raises(ValueError, match="Jira API returned"):
                 plugin.publish(
                     assembled,
                     {"project_key": "PROJ"},

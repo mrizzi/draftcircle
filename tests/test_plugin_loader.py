@@ -87,3 +87,30 @@ class TestPluginDownloadFlag:
 
         plugin = JiraFeaturePlugin()
         assert plugin.download is False
+
+
+class TestMarkdownPluginDownload:
+    def test_download_flag_is_true(self):
+        from backend.plugins.markdown import Plugin
+
+        plugin = Plugin()
+        assert plugin.download is True
+
+    def test_publish_returns_content_unchanged(self):
+        from backend.plugins.markdown import Plugin
+
+        plugin = Plugin()
+        content = "# Title\n\nSome content."
+        result = plugin.publish(content, {})
+        assert result == content
+
+    def test_assemble_concatenates_sections(self):
+        from backend.plugins.markdown import Plugin
+
+        plugin = Plugin()
+        sections = [
+            {"title": "Overview", "content": "First section."},
+            {"title": "Details", "content": "Second section."},
+        ]
+        result = plugin.assemble(sections)
+        assert result == "# Overview\n\nFirst section.\n\n# Details\n\nSecond section."

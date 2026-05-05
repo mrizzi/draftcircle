@@ -1,4 +1,5 @@
 import json
+from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -19,7 +20,10 @@ def app(populated_data_repo):
             "users.json": json.dumps(SAMPLE_USERS),
         },
     )
-    return create_app(data_repo_path=populated_data_repo)
+    with patch(
+        "backend.ai_orchestrator.query", side_effect=RuntimeError("AI disabled")
+    ):
+        yield create_app(data_repo_path=populated_data_repo)
 
 
 @pytest.fixture()

@@ -186,7 +186,9 @@ class AIOrchestrator:
 
         drafts = []
         for block in content_blocks:
-            if isinstance(block, ToolUseBlock) and "write_section_draft" in block.name:
+            if isinstance(block, ToolUseBlock) and block.name.endswith(
+                "write_section_draft"
+            ):
                 drafts.append(
                     DraftResult(
                         section_id=block.input["section_id"],
@@ -242,7 +244,7 @@ class AIOrchestrator:
             for block in content_blocks:
                 if not isinstance(block, ToolUseBlock):
                     continue
-                if "propose_revision" in block.name:
+                if block.name.endswith("propose_revision"):
                     return (
                         ProposalResult(
                             revised_text=block.input["revised_text"],
@@ -250,7 +252,7 @@ class AIOrchestrator:
                         ),
                         result_session_id,
                     )
-                if "post_reply" in block.name:
+                if block.name.endswith("post_reply"):
                     return ReplyResult(text=block.input["text"]), result_session_id
 
             return ReplyResult(text="I've noted your comment."), result_session_id

@@ -125,20 +125,17 @@ class TestFullLifecycle:
         assert session["progress"]["skipped"] == 1
         assert session["progress"]["required_remaining"] == 0
 
-        # Publish — markdown plugin writes to file
-        output_path = str(session_with_drafts["session"]["id"] + "-output.md")
-        data_repo = api.app.state.data_repo_path
+        # Publish — markdown plugin returns file download
         resp = api.post(
             f"/api/sessions/{sid}/publish",
-            json={
-                "config": {
-                    "output_path": str(data_repo / output_path),
-                    "allowed_dir": str(data_repo),
-                }
-            },
+            json={"config": {"filename": "lifecycle-output.md"}},
         )
         assert resp.status_code == 200
-        assert resp.json()["status"] == "published"
+        assert resp.headers["content-type"] == "text/markdown; charset=utf-8"
+        assert 'attachment; filename="lifecycle-output.md"' in resp.headers[
+            "content-disposition"
+        ]
+        assert "# Overview" in resp.text
 
         # Session is now published
         resp = api.get(f"/api/sessions/{sid}")
@@ -202,7 +199,6 @@ class TestFullLifecycle:
 class TestPostPublishLockdown:
     def _publish_session(self, api, session_with_drafts):
         sid = session_with_drafts["id"]
-        data_repo = api.app.state.data_repo_path
         api.post(
             f"/api/sessions/{sid}/sections/overview/approve",
             json={"user_id": "alice"},
@@ -217,12 +213,7 @@ class TestPostPublishLockdown:
         )
         resp = api.post(
             f"/api/sessions/{sid}/publish",
-            json={
-                "config": {
-                    "output_path": str(data_repo / "out.md"),
-                    "allowed_dir": str(data_repo),
-                }
-            },
+            json={"config": {}},
         )
         assert resp.status_code == 200
         return sid

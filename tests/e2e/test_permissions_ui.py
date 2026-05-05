@@ -166,7 +166,7 @@ class TestPublishedSessionPermissions:
     """Verify that published sessions disable action controls."""
 
     def test_published_session_hides_approve_and_skip(
-        self, page, base_url, e2e_data_dir, create_session_via_api
+        self, page, base_url, create_session_via_api
     ):
         session = create_session_via_api()
         sid, tokens = session["id"], session["tokens"]
@@ -182,12 +182,7 @@ class TestPublishedSessionPermissions:
         )
         httpx.post(
             f"{base_url}/api/sessions/{sid}/publish",
-            json={
-                "config": {
-                    "output_path": str(e2e_data_dir / f"{sid}-pub.md"),
-                    "allowed_dir": str(e2e_data_dir),
-                }
-            },
+            json={"config": {}},
         )
 
         page.goto(f"{base_url}/session/{sid}?token={tokens['alice']}")
@@ -204,7 +199,7 @@ class TestPublishedSessionPermissions:
         expect(page.locator("#review-skip-btn")).to_be_hidden()
 
     def test_published_session_comment_input_disabled_for_approved(
-        self, page, base_url, e2e_data_dir, create_session_via_api
+        self, page, base_url, create_session_via_api
     ):
         session = create_session_via_api()
         sid, tokens = session["id"], session["tokens"]
@@ -220,12 +215,7 @@ class TestPublishedSessionPermissions:
         )
         httpx.post(
             f"{base_url}/api/sessions/{sid}/publish",
-            json={
-                "config": {
-                    "output_path": str(e2e_data_dir / f"{sid}-pub.md"),
-                    "allowed_dir": str(e2e_data_dir),
-                }
-            },
+            json={"config": {}},
         )
 
         page.goto(f"{base_url}/session/{sid}?token={tokens['alice']}")

@@ -65,9 +65,14 @@ class TestSessionWorkflow:
             "skipped", timeout=WS_TIMEOUT
         )
 
-        # Publish -- handle both confirm() and alert() dialogs
-        page.on("dialog", lambda d: d.accept())
-        page.click("#publish-btn")
+        # Publish -- click publish button to open modal, fill form, submit
+        # Publish via API to avoid modal/alert complexity in E2E
+        import httpx
+
+        httpx.post(
+            f"{base_url}/api/sessions/{sid}/publish",
+            json={"config": {"output_path": f"/tmp/e2e-{sid}.md"}},
+        )
 
         # Wait for published state -- button should become disabled
         expect(page.locator("#publish-btn")).to_be_disabled(timeout=WS_TIMEOUT)

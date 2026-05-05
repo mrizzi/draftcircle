@@ -53,7 +53,7 @@ class TestCreateSessionForm:
 
         page.click('button[type="submit"]')
 
-        expect(page.locator("#view-session-list")).to_have_class(
+        expect(page.locator("#view-workspace")).to_have_class(
             "view active", timeout=WORKSPACE_TIMEOUT
         )
 
@@ -114,6 +114,6 @@ class TestCreateSessionForm:
 
         page.click('button[type="submit"]')
 
-        expect(page.locator("#view-session-list")).to_have_class(
+        expect(page.locator("#view-workspace")).to_have_class(
             "view active", timeout=WORKSPACE_TIMEOUT
         )

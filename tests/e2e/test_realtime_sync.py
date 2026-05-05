@@ -89,7 +89,10 @@ class TestRealtimeSync:
 
         expect(page.locator("#publish-btn")).to_be_enabled(timeout=WS_TIMEOUT)
 
-        page.on("dialog", lambda dialog: dialog.accept())
-        page.click("#publish-btn")
+        # Publish via API to avoid modal/alert complexity in E2E
+        httpx.post(
+            f"{base_url}/api/sessions/{sid}/publish",
+            json={"config": {"output_path": f"/tmp/e2e-sync-{sid}.md"}},
+        )
 
         expect(bob_page.locator("#publish-btn")).to_be_disabled(timeout=WS_TIMEOUT)

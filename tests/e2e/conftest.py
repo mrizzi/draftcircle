@@ -73,7 +73,9 @@ def e2e_server(tmp_path_factory):
     app = create_app(data_repo_path=str(data_dir))
 
     port = _find_free_port()
-    config = uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning")
+    config = uvicorn.Config(
+        app, host="127.0.0.1", port=port, log_level="warning", ws="websockets-sansio"
+    )
     server = uvicorn.Server(config)
 
     loop = asyncio.new_event_loop()

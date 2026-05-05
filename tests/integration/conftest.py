@@ -131,7 +131,19 @@ def session_with_drafts(api):
         },
     )
     assert resp.status_code == 201
-    session = resp.json()
+    content_type = resp.headers.get("content-type", "")
+    if "ndjson" in content_type:
+        for line in resp.text.strip().split("\n"):
+            if not line.strip():
+                continue
+            msg = json.loads(line)
+            if msg.get("type") == "done":
+                session = msg["session"]
+                break
+        else:
+            raise ValueError("No 'done' event in streaming response")
+    else:
+        session = resp.json()
     tokens = {p["user_id"]: p["token"] for p in session["participants"]}
     return {"id": session["id"], "tokens": tokens, "session": session}
 

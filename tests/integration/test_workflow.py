@@ -1,4 +1,6 @@
 # tests/integration/test_workflow.py
+import json
+
 import pytest
 
 from tests.integration.conftest import (
@@ -8,6 +10,19 @@ from tests.integration.conftest import (
 )
 
 pytestmark = pytest.mark.integration
+
+
+def _parse_create_response(resp):
+    content_type = resp.headers.get("content-type", "")
+    if "ndjson" in content_type:
+        for line in resp.text.strip().split("\n"):
+            if not line.strip():
+                continue
+            msg = json.loads(line)
+            if msg.get("type") == "done":
+                return msg["session"]
+        raise ValueError("No 'done' event in streaming response")
+    return resp.json()
 
 
 class TestUserRegistryIntegration:
@@ -323,7 +338,7 @@ class TestPluginIntegration:
                 "seed_text": "Seed.",
             },
         )
-        sid = resp.json()["id"]
+        sid = _parse_create_response(resp)["id"]
 
         api.post(
             f"/api/sessions/{sid}/sections/overview/approve", json={"user_id": "alice"}

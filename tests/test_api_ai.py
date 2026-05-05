@@ -89,8 +89,8 @@ class TestSessionCreationWithAI:
         lines = [
             json.loads(line) for line in resp.text.strip().split("\n") if line.strip()
         ]
-        progress_msgs = [l for l in lines if l["type"] == "progress"]
-        done_msgs = [l for l in lines if l["type"] == "done"]
+        progress_msgs = [msg for msg in lines if msg["type"] == "progress"]
+        done_msgs = [msg for msg in lines if msg["type"] == "done"]
 
         assert len(progress_msgs) >= 1
         assert any("Generating drafts" in m["message"] for m in progress_msgs)

@@ -64,7 +64,6 @@ class TestCreateSessionForm:
 
         page.fill("#seed-text", "Generate drafts for progress test.")
 
-        submit_btn = page.locator('button[type="submit"]')
         progress_texts = []
 
         def capture_mutations():

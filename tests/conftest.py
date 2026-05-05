@@ -22,7 +22,6 @@ def data_repo(tmp_path):
 SAMPLE_TEMPLATE = {
     "name": "Test Template",
     "description": "A test template with 3 sections",
-    "output_plugin": "markdown",
     "ai_context": "You are helping write a test document.",
     "sections": [
         {

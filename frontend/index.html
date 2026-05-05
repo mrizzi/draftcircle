@@ -104,7 +104,9 @@
     <div class="modal-content">
       <h3>Publish Session</h3>
       <form id="publish-form">
-        <div id="publish-jira-fields">
+        <label for="publish-plugin-select">Output Format</label>
+        <select id="publish-plugin-select" required></select>
+        <div id="publish-jira-fields" style="display:none">
           <label for="publish-project-key">Project Key</label>
           <input id="publish-project-key" type="text" required placeholder="e.g. PROJ">
           <label for="publish-summary">Summary</label>

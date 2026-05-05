@@ -136,7 +136,6 @@ class TestThreeClientBroadcast:
     def test_publish_broadcasts_to_all(self, api, session_with_drafts):
         sid = session_with_drafts["id"]
         t = session_with_drafts["tokens"]
-        data_repo = api.app.state.data_repo_path
 
         api.post(
             f"/api/sessions/{sid}/sections/overview/approve", json={"user_id": "alice"}
@@ -155,12 +154,7 @@ class TestThreeClientBroadcast:
 
                     api.post(
                         f"/api/sessions/{sid}/publish",
-                        json={
-                            "config": {
-                                "output_path": str(data_repo / "pub.md"),
-                                "allowed_dir": str(data_repo),
-                            }
-                        },
+                        json={"plugin": "markdown", "config": {}},
                     )
 
                     for ws in (ws_a, ws_b, ws_c):

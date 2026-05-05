@@ -92,7 +92,7 @@ class TestRealtimeSync:
         # Publish via API to avoid modal/alert complexity in E2E
         httpx.post(
             f"{base_url}/api/sessions/{sid}/publish",
-            json={"config": {}},
+            json={"plugin": "markdown", "config": {}},
         )
 
         expect(bob_page.locator("#publish-btn")).to_be_disabled(timeout=WS_TIMEOUT)

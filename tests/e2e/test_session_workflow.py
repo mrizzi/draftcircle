@@ -71,7 +71,7 @@ class TestSessionWorkflow:
 
         httpx.post(
             f"{base_url}/api/sessions/{sid}/publish",
-            json={"config": {}},
+            json={"plugin": "markdown", "config": {}},
         )
 
         # Wait for published state -- button should become disabled

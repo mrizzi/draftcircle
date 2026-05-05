@@ -12,7 +12,7 @@ from starlette.responses import JSONResponse, Response, StreamingResponse
 
 from backend.git_store import GitStore
 from backend.models import ParticipantInput, SessionStatus, User
-from backend.plugin_loader import load_plugin
+from backend.plugin_loader import list_plugins, load_plugin
 from backend.session_manager import SessionManager
 from backend.template_loader import TemplateLoader
 from backend.user_registry import UserRegistryManager
@@ -42,6 +42,7 @@ class AssignRequest(BaseModel):
 
 
 class PublishRequest(BaseModel):
+    plugin: str
     config: dict[str, Any]
 
 
@@ -84,6 +85,24 @@ def create_app(data_repo_path: str | None = None) -> FastAPI:
         if template is None:
             raise HTTPException(status_code=404, detail="Template not found")
         return template
+
+    @app.get("/api/plugins")
+    def get_plugins():
+        custom_dir = repo_path / "plugins"
+        names = list_plugins(
+            custom_plugins_dir=custom_dir if custom_dir.is_dir() else None
+        )
+        result = []
+        for name in names:
+            try:
+                plugin = load_plugin(
+                    name,
+                    custom_plugins_dir=custom_dir if custom_dir.is_dir() else None,
+                )
+                result.append({"name": name, "download": plugin.download})
+            except ValueError:
+                pass
+        return result
 
     @app.get("/api/users")
     def list_users():
@@ -424,11 +443,10 @@ def create_app(data_repo_path: str | None = None) -> FastAPI:
         if not sessions.is_ready_to_publish(session_id):
             raise HTTPException(status_code=400, detail="Session not ready to publish")
 
-        template = templates.get_template(session.template)
         custom_dir = repo_path / "plugins"
         try:
             plugin = load_plugin(
-                template.output_plugin,
+                req.plugin,
                 custom_plugins_dir=custom_dir if custom_dir.is_dir() else None,
             )
         except ValueError as e:

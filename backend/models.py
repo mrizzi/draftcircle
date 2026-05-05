@@ -38,9 +38,10 @@ class TemplateSection(BaseModel):
 
 
 class Template(BaseModel):
+    model_config = {"extra": "ignore"}
+
     name: str = Field(min_length=1)
     description: str
-    output_plugin: str = Field(min_length=1)
     ai_context: str
     sections: list[TemplateSection]
     slug: str | None = None

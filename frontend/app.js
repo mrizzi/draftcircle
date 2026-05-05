@@ -33,6 +33,7 @@ const state = {
   sectionContent: {},
   sectionComments: {},
   sectionProposals: {},
+  plugins: [],
   userId: null,
   token: null,
   ws: null,
@@ -830,66 +831,82 @@ async function skipSection() {
   }
 }
 
-function showPublishModal() {
-  const template = findTemplate();
-  const isJira = template && template.output_plugin === 'jira';
+const PLUGIN_FIELDS = {
+  'jira_feature': 'publish-jira-fields',
+  'markdown': 'publish-markdown-fields',
+};
 
-  document.getElementById('publish-jira-fields').style.display = isJira ? 'block' : 'none';
-  document.getElementById('publish-markdown-fields').style.display = isJira ? 'none' : 'block';
-
-  if (isJira) {
+function showPluginFields(pluginName) {
+  Object.values(PLUGIN_FIELDS).forEach(id => {
+    document.getElementById(id).style.display = 'none';
+  });
+  const fieldId = PLUGIN_FIELDS[pluginName];
+  if (fieldId) document.getElementById(fieldId).style.display = 'block';
+  if (pluginName === 'jira_feature') {
     document.getElementById('publish-summary').value = state.currentSession.id;
-  } else {
+  } else if (pluginName === 'markdown') {
     document.getElementById('publish-filename').value = state.currentSession.id + '.md';
   }
+}
+
+async function showPublishModal() {
+  if (state.plugins.length === 0) {
+    state.plugins = await apiFetch('/plugins');
+  }
+
+  const select = document.getElementById('publish-plugin-select');
+  select.textContent = '';
+  state.plugins.forEach(p => {
+    const opt = document.createElement('option');
+    opt.value = p.name;
+    opt.textContent = p.name.replace(/_/g, ' ');
+    select.appendChild(opt);
+  });
+
+  select.onchange = () => showPluginFields(select.value);
+  showPluginFields(select.value);
 
   document.getElementById('publish-modal').style.display = 'flex';
 }
 
+function buildPluginConfig(pluginName) {
+  if (pluginName === 'jira_feature') {
+    const projectKey = document.getElementById('publish-project-key').value.trim();
+    const summary = document.getElementById('publish-summary').value.trim();
+    const labelsRaw = document.getElementById('publish-labels').value.trim();
+    const labels = labelsRaw ? labelsRaw.split(',').map(l => l.trim()).filter(Boolean) : [];
+    return { project_key: projectKey, summary: summary || state.currentSession.id, labels };
+  }
+  if (pluginName === 'markdown') {
+    const filename = document.getElementById('publish-filename').value.trim() || state.currentSession.id + '.md';
+    return { filename };
+  }
+  return {};
+}
+
 async function handlePublish(e) {
   e.preventDefault();
-  const template = findTemplate();
-  const isJira = template && template.output_plugin === 'jira';
+  const pluginName = document.getElementById('publish-plugin-select').value;
+  const pluginMeta = state.plugins.find(p => p.name === pluginName);
+  const config = buildPluginConfig(pluginName);
 
   const submitBtn = e.target.querySelector('button[type="submit"]');
   submitBtn.disabled = true;
   submitBtn.textContent = 'Publishing…';
 
-  if (isJira) {
-    const projectKey = document.getElementById('publish-project-key').value.trim();
-    const summary = document.getElementById('publish-summary').value.trim();
-    const labelsRaw = document.getElementById('publish-labels').value.trim();
-    const labels = labelsRaw ? labelsRaw.split(',').map(l => l.trim()).filter(Boolean) : [];
-    const config = { project_key: projectKey, summary: summary || state.currentSession.id, labels };
-
-    try {
-      const result = await apiFetch('/sessions/' + state.currentSession.id + '/publish', {
-        method: 'POST',
-        body: JSON.stringify({ config }),
-      });
-      document.getElementById('publish-modal').style.display = 'none';
-      alert('Published. Reference: ' + result.output_ref);
-      await openSession(state.currentSession.id);
-    } catch (err) {
-      alert('Error: ' + err.message);
-    } finally {
-      submitBtn.disabled = false;
-      submitBtn.textContent = 'Publish';
+  try {
+    const resp = await fetch(API + '/sessions/' + state.currentSession.id + '/publish', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ plugin: pluginName, config }),
+    });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({ detail: resp.statusText }));
+      throw new Error(err.detail || resp.statusText);
     }
-  } else {
-    const filename = document.getElementById('publish-filename').value.trim() || state.currentSession.id + '.md';
-    const config = { filename };
 
-    try {
-      const resp = await fetch(API + '/sessions/' + state.currentSession.id + '/publish', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ config }),
-      });
-      if (!resp.ok) {
-        const err = await resp.json().catch(() => ({ detail: resp.statusText }));
-        throw new Error(err.detail || resp.statusText);
-      }
+    if (pluginMeta && pluginMeta.download) {
+      const filename = config.filename || state.currentSession.id + '.md';
       const blob = await resp.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -899,15 +916,18 @@ async function handlePublish(e) {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-
-      document.getElementById('publish-modal').style.display = 'none';
-      await openSession(state.currentSession.id);
-    } catch (err) {
-      alert('Error: ' + err.message);
-    } finally {
-      submitBtn.disabled = false;
-      submitBtn.textContent = 'Publish';
+    } else {
+      const result = await resp.json();
+      alert('Published. Reference: ' + result.output_ref);
     }
+
+    document.getElementById('publish-modal').style.display = 'none';
+    await openSession(state.currentSession.id);
+  } catch (err) {
+    alert('Error: ' + err.message);
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'Publish';
   }
 }
 

@@ -6,6 +6,20 @@ from pathlib import Path
 from backend.plugins.base import OutputPlugin
 
 _PLUGIN_NAME_RE = re.compile(r"^[a-z0-9_]+$")
+_BUILTIN_DIR = Path(__file__).parent / "plugins"
+_EXCLUDED = {"base", "__init__"}
+
+
+def list_plugins(custom_plugins_dir: Path | None = None) -> list[str]:
+    names: set[str] = set()
+    for path in _BUILTIN_DIR.glob("*.py"):
+        if path.stem not in _EXCLUDED:
+            names.add(path.stem)
+    if custom_plugins_dir and custom_plugins_dir.is_dir():
+        for path in custom_plugins_dir.glob("*.py"):
+            if _PLUGIN_NAME_RE.match(path.stem):
+                names.add(path.stem)
+    return sorted(names)
 
 
 def load_plugin(name: str, custom_plugins_dir: Path | None = None) -> OutputPlugin:

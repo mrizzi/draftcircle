@@ -324,7 +324,7 @@ class TestPublishEndpoint:
         )
         resp = client.post(
             f"/api/sessions/{sid}/publish",
-            json={"config": {"filename": "custom-output.md"}},
+            json={"plugin": "markdown", "config": {"filename": "custom-output.md"}},
         )
         assert resp.status_code == 200
         assert resp.headers["content-type"] == "text/markdown; charset=utf-8"
@@ -343,14 +343,17 @@ class TestPublishEndpoint:
         )
         resp = client.post(
             f"/api/sessions/{sid}/publish",
-            json={"config": {}},
+            json={"plugin": "markdown", "config": {}},
         )
         assert resp.status_code == 200
         assert f'filename="{sid}.md"' in resp.headers["content-disposition"]
 
     def test_publish_when_not_ready(self, client, session_with_participant):
         sid = session_with_participant["id"]
-        resp = client.post(f"/api/sessions/{sid}/publish", json={"config": {}})
+        resp = client.post(
+            f"/api/sessions/{sid}/publish",
+            json={"plugin": "markdown", "config": {}},
+        )
         assert resp.status_code == 400
 
     def test_publish_twice_fails(self, client, session_with_participant):
@@ -360,11 +363,11 @@ class TestPublishEndpoint:
         )
         client.post(
             f"/api/sessions/{sid}/publish",
-            json={"config": {}},
+            json={"plugin": "markdown", "config": {}},
         )
         resp = client.post(
             f"/api/sessions/{sid}/publish",
-            json={"config": {}},
+            json={"plugin": "markdown", "config": {}},
         )
         assert resp.status_code == 400
 

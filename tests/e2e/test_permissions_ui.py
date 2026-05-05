@@ -182,7 +182,7 @@ class TestPublishedSessionPermissions:
         )
         httpx.post(
             f"{base_url}/api/sessions/{sid}/publish",
-            json={"config": {}},
+            json={"plugin": "markdown", "config": {}},
         )
 
         page.goto(f"{base_url}/session/{sid}?token={tokens['alice']}")
@@ -215,7 +215,7 @@ class TestPublishedSessionPermissions:
         )
         httpx.post(
             f"{base_url}/api/sessions/{sid}/publish",
-            json={"config": {}},
+            json={"plugin": "markdown", "config": {}},
         )
 
         page.goto(f"{base_url}/session/{sid}?token={tokens['alice']}")

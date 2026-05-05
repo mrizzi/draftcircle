@@ -128,7 +128,7 @@ class TestFullLifecycle:
         # Publish — markdown plugin returns file download
         resp = api.post(
             f"/api/sessions/{sid}/publish",
-            json={"config": {"filename": "lifecycle-output.md"}},
+            json={"plugin": "markdown", "config": {"filename": "lifecycle-output.md"}},
         )
         assert resp.status_code == 200
         assert resp.headers["content-type"] == "text/markdown; charset=utf-8"
@@ -214,7 +214,7 @@ class TestPostPublishLockdown:
         )
         resp = api.post(
             f"/api/sessions/{sid}/publish",
-            json={"config": {}},
+            json={"plugin": "markdown", "config": {}},
         )
         assert resp.status_code == 200
         return sid
@@ -229,15 +229,9 @@ class TestPostPublishLockdown:
 
     def test_double_publish_fails(self, api, session_with_drafts):
         sid = self._publish_session(api, session_with_drafts)
-        data_repo = api.app.state.data_repo_path
         resp = api.post(
             f"/api/sessions/{sid}/publish",
-            json={
-                "config": {
-                    "output_path": str(data_repo / "out2.md"),
-                    "allowed_dir": str(data_repo),
-                }
-            },
+            json={"plugin": "markdown", "config": {}},
         )
         assert resp.status_code == 400
         assert "already published" in resp.json()["detail"].lower()
@@ -328,7 +322,7 @@ class TestPluginIntegration:
 
         resp = api.post(
             f"/api/sessions/{sid}/publish",
-            json={"config": {}},
+            json={"plugin": "markdown", "config": {}},
         )
         assert resp.status_code == 200
         assert resp.json()["output_ref"] == "custom-override-ref"

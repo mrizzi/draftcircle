@@ -30,7 +30,6 @@ class TestTemplate:
         template = Template(
             name="Test",
             description="A test template",
-            output_plugin="markdown",
             ai_context="You are helping.",
             sections=[section],
         )

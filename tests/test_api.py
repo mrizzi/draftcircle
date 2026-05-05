@@ -315,51 +315,55 @@ class TestSectionActionEndpoints:
 
 
 class TestPublishEndpoint:
-    def test_publish_when_ready(self, client, session_with_participant, tmp_path):
+    def test_publish_returns_markdown_file_download(
+        self, client, session_with_participant
+    ):
         sid = session_with_participant["id"]
         client.post(
             f"/api/sessions/{sid}/sections/overview/approve", json={"user_id": "alice"}
         )
         resp = client.post(
             f"/api/sessions/{sid}/publish",
-            json={
-                "config": {
-                    "output_path": str(tmp_path / "output.md"),
-                    "allowed_dir": str(tmp_path),
-                }
-            },
+            json={"config": {"filename": "custom-output.md"}},
         )
         assert resp.status_code == 200
-        assert resp.json()["status"] == "published"
-        assert (tmp_path / "output.md").exists()
+        assert resp.headers["content-type"] == "text/markdown; charset=utf-8"
+        assert 'attachment; filename="custom-output.md"' in resp.headers[
+            "content-disposition"
+        ]
+        assert "# Overview" in resp.text
+
+    def test_publish_uses_session_id_as_default_filename(
+        self, client, session_with_participant
+    ):
+        sid = session_with_participant["id"]
+        client.post(
+            f"/api/sessions/{sid}/sections/overview/approve", json={"user_id": "alice"}
+        )
+        resp = client.post(
+            f"/api/sessions/{sid}/publish",
+            json={"config": {}},
+        )
+        assert resp.status_code == 200
+        assert f'filename="{sid}.md"' in resp.headers["content-disposition"]
 
     def test_publish_when_not_ready(self, client, session_with_participant):
         sid = session_with_participant["id"]
         resp = client.post(f"/api/sessions/{sid}/publish", json={"config": {}})
         assert resp.status_code == 400
 
-    def test_publish_twice_fails(self, client, session_with_participant, tmp_path):
+    def test_publish_twice_fails(self, client, session_with_participant):
         sid = session_with_participant["id"]
         client.post(
             f"/api/sessions/{sid}/sections/overview/approve", json={"user_id": "alice"}
         )
         client.post(
             f"/api/sessions/{sid}/publish",
-            json={
-                "config": {
-                    "output_path": str(tmp_path / "out1.md"),
-                    "allowed_dir": str(tmp_path),
-                }
-            },
+            json={"config": {}},
         )
         resp = client.post(
             f"/api/sessions/{sid}/publish",
-            json={
-                "config": {
-                    "output_path": str(tmp_path / "out2.md"),
-                    "allowed_dir": str(tmp_path),
-                }
-            },
+            json={"config": {}},
         )
         assert resp.status_code == 400
 

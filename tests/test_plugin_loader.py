@@ -24,26 +24,6 @@ class TestOutputPluginInterface:
         assert "This is the overview." in result
         assert "# Details" in result
 
-    def test_markdown_publish_writes_file(self, tmp_path):
-        plugin = MarkdownPlugin()
-        content = "# Doc\n\nContent here."
-        config = {
-            "output_path": str(tmp_path / "output.md"),
-            "allowed_dir": str(tmp_path),
-        }
-        ref = plugin.publish(content, config)
-        assert Path(ref).exists()
-        assert Path(ref).read_text() == content
-
-    def test_markdown_publish_rejects_path_traversal(self, tmp_path):
-        plugin = MarkdownPlugin()
-        config = {
-            "output_path": "/etc/evil.md",
-            "allowed_dir": str(tmp_path),
-        }
-        with pytest.raises(ValueError, match="must be within"):
-            plugin.publish("content", config)
-
 
 class TestPluginLoader:
     def test_loads_builtin_plugin(self):

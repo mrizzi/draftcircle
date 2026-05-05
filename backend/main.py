@@ -8,7 +8,7 @@ from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
-from starlette.responses import JSONResponse, StreamingResponse
+from starlette.responses import JSONResponse, Response, StreamingResponse
 
 from backend.git_store import GitStore
 from backend.models import ParticipantInput, SessionStatus, User
@@ -438,8 +438,22 @@ def create_app(data_repo_path: str | None = None) -> FastAPI:
         assembled = plugin.assemble(approved_sections)
         output_ref = plugin.publish(assembled, req.config)
 
-        sessions.mark_published(session_id, output_ref)
+        if plugin.download:
+            filename = req.config.get("filename", f"{session_id}.md")
+            sessions.mark_published(session_id, filename)
+            await ws_manager.broadcast(
+                session_id,
+                {"type": "session_published", "output_ref": filename},
+            )
+            return Response(
+                content=output_ref,
+                media_type="text/markdown",
+                headers={
+                    "Content-Disposition": f'attachment; filename="{filename}"',
+                },
+            )
 
+        sessions.mark_published(session_id, output_ref)
         await ws_manager.broadcast(
             session_id,
             {"type": "session_published", "output_ref": output_ref},

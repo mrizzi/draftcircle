@@ -328,9 +328,10 @@ class TestPublishEndpoint:
         )
         assert resp.status_code == 200
         assert resp.headers["content-type"] == "text/markdown; charset=utf-8"
-        assert 'attachment; filename="custom-output.md"' in resp.headers[
-            "content-disposition"
-        ]
+        assert (
+            'attachment; filename="custom-output.md"'
+            in resp.headers["content-disposition"]
+        )
         assert "# Overview" in resp.text
 
     def test_publish_uses_session_id_as_default_filename(

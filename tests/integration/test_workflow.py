@@ -132,9 +132,10 @@ class TestFullLifecycle:
         )
         assert resp.status_code == 200
         assert resp.headers["content-type"] == "text/markdown; charset=utf-8"
-        assert 'attachment; filename="lifecycle-output.md"' in resp.headers[
-            "content-disposition"
-        ]
+        assert (
+            'attachment; filename="lifecycle-output.md"'
+            in resp.headers["content-disposition"]
+        )
         assert "# Overview" in resp.text
 
         # Session is now published

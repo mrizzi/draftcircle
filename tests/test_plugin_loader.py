@@ -1,5 +1,3 @@
-from pathlib import Path
-
 import pytest
 
 from backend.plugin_loader import load_plugin

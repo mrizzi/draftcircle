@@ -5,6 +5,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from backend.main import create_app
+from tests.conftest import parse_create_session_response
 from tests.test_ai_orchestrator import mock_agent_messages
 
 
@@ -16,17 +17,6 @@ def app_with_ai(populated_data_repo):
 @pytest.fixture()
 def client_ai(app_with_ai):
     return TestClient(app_with_ai)
-
-
-def parse_streaming_session(resp):
-    """Parse NDJSON streaming response, return the session from the 'done' event."""
-    for line in resp.text.strip().split("\n"):
-        if not line.strip():
-            continue
-        msg = json.loads(line)
-        if msg.get("type") == "done":
-            return msg["session"]
-    raise ValueError("No 'done' event in streaming response")
 
 
 class TestSessionCreationWithAI:
@@ -59,7 +49,7 @@ class TestSessionCreationWithAI:
                 },
             )
         assert resp.status_code == 201
-        session = parse_streaming_session(resp)
+        session = parse_create_session_response(resp)
         session_id = session["id"]
 
         section_resp = client_ai.get(f"/api/sessions/{session_id}/sections/overview")
@@ -138,7 +128,7 @@ class TestCommentWithAI:
                 "seed_text": "Feature X.",
             },
         )
-        return parse_streaming_session(resp)["id"]
+        return parse_create_session_response(resp)["id"]
 
     def test_comment_triggers_proposal(self, client_ai):
         with patch("backend.ai_orchestrator.query") as mock_query:
@@ -280,7 +270,7 @@ class TestAIGracefulDegradation:
                 },
             )
         assert resp.status_code == 201
-        session = parse_streaming_session(resp)
+        session = parse_create_session_response(resp)
         session_id = session["id"]
         section_resp = client_ai.get(f"/api/sessions/{session_id}/sections/overview")
         assert section_resp.json()["content"] == ""
@@ -323,7 +313,7 @@ class TestAIGracefulDegradation:
                     "seed_text": "Feature X.",
                 },
             )
-            session_id = parse_streaming_session(resp)["id"]
+            session_id = parse_create_session_response(resp)["id"]
 
             resp = client_ai.post(
                 f"/api/sessions/{session_id}/comments",

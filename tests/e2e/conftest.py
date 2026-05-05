@@ -12,7 +12,7 @@ import uvicorn
 from playwright.sync_api import expect
 
 from backend.main import create_app
-from tests.conftest import SAMPLE_TEMPLATE
+from tests.conftest import SAMPLE_TEMPLATE, parse_create_session_response
 from tests.integration.conftest import INTEGRATION_USERS, _ai_side_effect
 
 WORKSPACE_TIMEOUT = 15000
@@ -148,19 +148,7 @@ def create_session_via_api(base_url):
             },
         )
         assert resp.status_code == 201
-        content_type = resp.headers.get("content-type", "")
-        if "ndjson" in content_type:
-            for line in resp.text.strip().split("\n"):
-                if not line.strip():
-                    continue
-                msg = json.loads(line)
-                if msg.get("type") == "done":
-                    session = msg["session"]
-                    break
-            else:
-                raise ValueError("No 'done' event in streaming response")
-        else:
-            session = resp.json()
+        session = parse_create_session_response(resp)
         tokens = {p["user_id"]: p["token"] for p in session["participants"]}
         return {"id": session["id"], "tokens": tokens, "session": session}
 

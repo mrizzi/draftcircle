@@ -134,7 +134,7 @@ function showCreateForm() {
   });
   document.getElementById('seed-text').value = '';
 
-  select.addEventListener('change', renderSectionOwnersGrid);
+  select.onchange = renderSectionOwnersGrid;
   renderSectionOwnersGrid();
   showView('create-session');
 }

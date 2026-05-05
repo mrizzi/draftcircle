@@ -8,6 +8,7 @@ from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
+from starlette.responses import JSONResponse, StreamingResponse
 
 from backend.git_store import GitStore
 from backend.models import ParticipantInput, SessionStatus, User
@@ -98,7 +99,6 @@ def create_app(data_repo_path: str | None = None) -> FastAPI:
 
     @app.post("/api/sessions")
     async def create_session(req: CreateSessionRequest):
-        from starlette.responses import StreamingResponse
 
         try:
             session = sessions.create_session(
@@ -110,8 +110,6 @@ def create_app(data_repo_path: str | None = None) -> FastAPI:
             raise HTTPException(status_code=400, detail=str(e))
 
         if not (req.seed_text and ai):
-            from starlette.responses import JSONResponse
-
             result = sessions.get_session(session.id)
             return JSONResponse(result.model_dump(mode="json"), status_code=201)
 

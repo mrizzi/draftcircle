@@ -1,4 +1,5 @@
 import json
+import os
 from typing import Any
 
 import httpx
@@ -72,8 +73,6 @@ class JiraFeaturePlugin(OutputPlugin):
         return json.dumps(adf)
 
     def publish(self, output: str, config: dict[str, Any]) -> str:
-        import os
-
         base_url = os.environ.get("JIRA_BASE_URL")
         email = os.environ.get("JIRA_EMAIL")
         api_token = os.environ.get("JIRA_API_TOKEN")

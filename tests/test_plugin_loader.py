@@ -92,3 +92,19 @@ class TestMarkdownPluginDownload:
         ]
         result = plugin.assemble(sections)
         assert result == "# Overview\n\nFirst section.\n\n# Details\n\nSecond section."
+
+
+class TestPluginConfigSchema:
+    def test_base_plugin_has_empty_config_schema(self):
+        from backend.plugins.markdown import Plugin
+
+        plugin = Plugin()
+        assert hasattr(plugin, "config_schema")
+
+    def test_default_config_schema_is_empty_list(self):
+        from backend.plugins.markdown import Plugin
+
+        plugin = Plugin()
+        # Markdown plugin will get its own schema in Task 2,
+        # but the base class default should be a list
+        assert isinstance(plugin.config_schema, list)

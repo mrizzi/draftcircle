@@ -62,6 +62,28 @@ def _markdown_to_adf_nodes(text: str) -> list[dict]:
 
 
 class JiraFeaturePlugin(OutputPlugin):
+    config_schema = [
+        {
+            "name": "project_key",
+            "type": "text",
+            "label": "Project Key",
+            "required": True,
+            "placeholder": "e.g. PROJ",
+        },
+        {
+            "name": "summary",
+            "type": "text",
+            "label": "Summary",
+            "default": "DraftCircle Document",
+        },
+        {
+            "name": "labels",
+            "type": "list",
+            "label": "Labels",
+            "placeholder": "bug, feature",
+        },
+    ]
+
     def assemble(self, sections: list[SectionContent]) -> str:
         content = []
         for section in sections:

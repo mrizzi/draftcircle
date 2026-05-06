@@ -108,3 +108,54 @@ class TestPluginConfigSchema:
         # Markdown plugin will get its own schema in Task 2,
         # but the base class default should be a list
         assert isinstance(plugin.config_schema, list)
+
+
+class TestJiraConfigSchema:
+    def test_jira_has_config_schema(self):
+        from backend.plugins.jira_feature import JiraFeaturePlugin
+
+        plugin = JiraFeaturePlugin()
+        assert len(plugin.config_schema) == 3
+
+    def test_jira_project_key_field(self):
+        from backend.plugins.jira_feature import JiraFeaturePlugin
+
+        plugin = JiraFeaturePlugin()
+        field = plugin.config_schema[0]
+        assert field["name"] == "project_key"
+        assert field["type"] == "text"
+        assert field["required"] is True
+
+    def test_jira_summary_field(self):
+        from backend.plugins.jira_feature import JiraFeaturePlugin
+
+        plugin = JiraFeaturePlugin()
+        field = plugin.config_schema[1]
+        assert field["name"] == "summary"
+        assert field["type"] == "text"
+        assert field["default"] == "DraftCircle Document"
+
+    def test_jira_labels_field(self):
+        from backend.plugins.jira_feature import JiraFeaturePlugin
+
+        plugin = JiraFeaturePlugin()
+        field = plugin.config_schema[2]
+        assert field["name"] == "labels"
+        assert field["type"] == "list"
+
+
+class TestMarkdownConfigSchema:
+    def test_markdown_has_config_schema(self):
+        from backend.plugins.markdown import Plugin
+
+        plugin = Plugin()
+        assert len(plugin.config_schema) == 1
+
+    def test_markdown_filename_field(self):
+        from backend.plugins.markdown import Plugin
+
+        plugin = Plugin()
+        field = plugin.config_schema[0]
+        assert field["name"] == "filename"
+        assert field["type"] == "text"
+        assert field["default"] == "document.md"

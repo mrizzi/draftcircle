@@ -12,7 +12,7 @@ from starlette.responses import JSONResponse, Response, StreamingResponse
 
 from backend.git_store import GitStore
 from backend.models import ParticipantInput, SessionStatus, User
-from backend.plugin_loader import list_plugins, load_plugin
+from backend.plugin_loader import list_plugins, load_plugin, validate_plugin_config
 from backend.session_manager import SessionManager
 from backend.template_loader import TemplateLoader
 from backend.user_registry import UserRegistryManager
@@ -455,6 +455,10 @@ def create_app(data_repo_path: str | None = None) -> FastAPI:
             )
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
+
+        errors = validate_plugin_config(plugin.config_schema, req.config)
+        if errors:
+            raise HTTPException(status_code=422, detail=errors)
 
         approved_sections = sessions.get_approved_sections(session_id)
         assembled = plugin.assemble(approved_sections)

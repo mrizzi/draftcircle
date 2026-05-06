@@ -540,3 +540,48 @@ class TestPluginEndpoints:
         assert md["download"] is True
         assert len(md["config_schema"]) == 1
         assert md["config_schema"][0]["name"] == "filename"
+
+
+class TestPublishValidation:
+    def test_publish_rejects_missing_required_field(
+        self, client, session_with_participant
+    ):
+        sid = session_with_participant["id"]
+        uid = "alice"
+        for section_id in ["overview", "details", "notes"]:
+            client.post(
+                f"/api/sessions/{sid}/sections/{section_id}/content",
+                json={"user_id": uid, "content": "Approved content"},
+            )
+            client.post(
+                f"/api/sessions/{sid}/sections/{section_id}/approve",
+                json={"user_id": uid},
+            )
+
+        resp = client.post(
+            f"/api/sessions/{sid}/publish",
+            json={"plugin": "jira_feature", "config": {}},
+        )
+        assert resp.status_code == 422
+        assert "project_key" in resp.json()["detail"][0]
+
+    def test_publish_passes_validation_with_required_fields(
+        self, client, session_with_participant
+    ):
+        sid = session_with_participant["id"]
+        uid = "alice"
+        for section_id in ["overview", "details", "notes"]:
+            client.post(
+                f"/api/sessions/{sid}/sections/{section_id}/content",
+                json={"user_id": uid, "content": "Content"},
+            )
+            client.post(
+                f"/api/sessions/{sid}/sections/{section_id}/approve",
+                json={"user_id": uid},
+            )
+
+        resp = client.post(
+            f"/api/sessions/{sid}/publish",
+            json={"plugin": "markdown", "config": {}},
+        )
+        assert resp.status_code == 200

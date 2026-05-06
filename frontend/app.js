@@ -1049,10 +1049,9 @@ async function showPublishModal() {
 
 async function handlePublish(e) {
   e.preventDefault();
-  const pluginName = document.getElementById('publish-plugin-select').value;
-  const pluginMeta = state.plugins.find(p => p.name === pluginName);
-  var pluginData = state.plugins.find(function(p) { return p.name === pluginName; });
-  var config = collectPluginConfig(pluginData ? pluginData.config_schema : []);
+  var pluginName = document.getElementById('publish-plugin-select').value;
+  var pluginMeta = state.plugins.find(function(p) { return p.name === pluginName; });
+  var config = collectPluginConfig(pluginMeta ? pluginMeta.config_schema : []);
 
   const submitBtn = e.target.querySelector('button[type="submit"]');
   submitBtn.disabled = true;

@@ -43,14 +43,20 @@ def load_plugin(name: str, custom_plugins_dir: Path | None = None) -> OutputPlug
         raise ValueError(f"Plugin '{name}' not found")
 
 
+_FIELD_NAME_RE = _PLUGIN_NAME_RE
+
+
 def validate_plugin_config(
     schema: list[dict[str, Any]], config: dict[str, Any]
 ) -> list[str]:
     errors = []
     for field in schema:
+        name = field["name"]
+        if not _FIELD_NAME_RE.match(name):
+            errors.append(f"Invalid field name: '{name}'")
+            continue
         if not field.get("required"):
             continue
-        name = field["name"]
         value = config.get(name)
         if value is None or value == "" or value == []:
             errors.append(f"Field '{name}' is required")

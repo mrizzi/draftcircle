@@ -219,3 +219,18 @@ class TestValidatePluginConfig:
         ]
         errors = validate_plugin_config(schema, {})
         assert len(errors) == 2
+
+    def test_rejects_invalid_field_name(self):
+        schema = [
+            {"name": 'x"][onclick="alert', "type": "text", "label": "X"},
+        ]
+        errors = validate_plugin_config(schema, {})
+        assert len(errors) == 1
+        assert "Invalid field name" in errors[0]
+
+    def test_rejects_field_name_with_special_chars(self):
+        schema = [
+            {"name": "field-name", "type": "text", "label": "F"},
+        ]
+        errors = validate_plugin_config(schema, {})
+        assert len(errors) == 1

@@ -520,3 +520,23 @@ class TestCoordinatorTokenAccess:
         data = resp.json()
         for p in data["participants"]:
             assert "token" not in p
+
+
+class TestPluginEndpoints:
+    def test_list_plugins_includes_config_schema(self, client):
+        resp = client.get("/api/plugins")
+        assert resp.status_code == 200
+        plugins = resp.json()
+        assert len(plugins) >= 2
+        jira = next(p for p in plugins if p["name"] == "jira_feature")
+        assert "config_schema" in jira
+        assert len(jira["config_schema"]) == 3
+        assert jira["config_schema"][0]["name"] == "project_key"
+
+    def test_list_plugins_markdown_schema(self, client):
+        resp = client.get("/api/plugins")
+        plugins = resp.json()
+        md = next(p for p in plugins if p["name"] == "markdown")
+        assert md["download"] is True
+        assert len(md["config_schema"]) == 1
+        assert md["config_schema"][0]["name"] == "filename"

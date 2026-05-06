@@ -2,6 +2,7 @@ import importlib
 import importlib.util
 import re
 from pathlib import Path
+from typing import Any
 
 from backend.plugins.base import OutputPlugin
 
@@ -40,3 +41,17 @@ def load_plugin(name: str, custom_plugins_dir: Path | None = None) -> OutputPlug
         return module.Plugin()
     except ModuleNotFoundError:
         raise ValueError(f"Plugin '{name}' not found")
+
+
+def validate_plugin_config(
+    schema: list[dict[str, Any]], config: dict[str, Any]
+) -> list[str]:
+    errors = []
+    for field in schema:
+        if not field.get("required"):
+            continue
+        name = field["name"]
+        value = config.get(name)
+        if value is None or value == "" or value == []:
+            errors.append(f"Field '{name}' is required")
+    return errors

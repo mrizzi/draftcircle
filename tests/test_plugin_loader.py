@@ -1,6 +1,6 @@
 import pytest
 
-from backend.plugin_loader import load_plugin
+from backend.plugin_loader import load_plugin, validate_plugin_config
 from backend.plugins.base import OutputPlugin
 from backend.plugins.jira_feature import JiraFeaturePlugin
 from backend.plugins.markdown import MarkdownPlugin
@@ -159,3 +159,60 @@ class TestMarkdownConfigSchema:
         assert field["name"] == "filename"
         assert field["type"] == "text"
         assert field["default"] == "document.md"
+
+
+class TestValidatePluginConfig:
+    def test_passes_when_required_fields_present(self):
+        schema = [
+            {"name": "project_key", "type": "text", "label": "PK", "required": True},
+        ]
+        errors = validate_plugin_config(schema, {"project_key": "PROJ"})
+        assert errors == []
+
+    def test_fails_when_required_field_missing(self):
+        schema = [
+            {"name": "project_key", "type": "text", "label": "Project Key", "required": True},
+        ]
+        errors = validate_plugin_config(schema, {})
+        assert len(errors) == 1
+        assert "project_key" in errors[0]
+
+    def test_fails_when_required_field_is_empty_string(self):
+        schema = [
+            {"name": "project_key", "type": "text", "label": "PK", "required": True},
+        ]
+        errors = validate_plugin_config(schema, {"project_key": ""})
+        assert len(errors) == 1
+
+    def test_fails_when_required_field_is_none(self):
+        schema = [
+            {"name": "project_key", "type": "text", "label": "PK", "required": True},
+        ]
+        errors = validate_plugin_config(schema, {"project_key": None})
+        assert len(errors) == 1
+
+    def test_fails_when_required_list_field_is_empty(self):
+        schema = [
+            {"name": "tags", "type": "list", "label": "Tags", "required": True},
+        ]
+        errors = validate_plugin_config(schema, {"tags": []})
+        assert len(errors) == 1
+
+    def test_passes_when_optional_field_missing(self):
+        schema = [
+            {"name": "summary", "type": "text", "label": "Summary"},
+        ]
+        errors = validate_plugin_config(schema, {})
+        assert errors == []
+
+    def test_passes_with_empty_schema(self):
+        errors = validate_plugin_config([], {"anything": "goes"})
+        assert errors == []
+
+    def test_collects_multiple_errors(self):
+        schema = [
+            {"name": "a", "type": "text", "label": "A", "required": True},
+            {"name": "b", "type": "text", "label": "B", "required": True},
+        ]
+        errors = validate_plugin_config(schema, {})
+        assert len(errors) == 2

@@ -99,11 +99,13 @@ def create_app(data_repo_path: str | None = None) -> FastAPI:
                     name,
                     custom_plugins_dir=custom_dir if custom_dir.is_dir() else None,
                 )
-                result.append({
-                    "name": name,
-                    "download": plugin.download,
-                    "config_schema": plugin.config_schema,
-                })
+                result.append(
+                    {
+                        "name": name,
+                        "download": plugin.download,
+                        "config_schema": plugin.config_schema,
+                    }
+                )
             except ValueError:
                 pass
         return result

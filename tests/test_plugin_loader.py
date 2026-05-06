@@ -171,7 +171,12 @@ class TestValidatePluginConfig:
 
     def test_fails_when_required_field_missing(self):
         schema = [
-            {"name": "project_key", "type": "text", "label": "Project Key", "required": True},
+            {
+                "name": "project_key",
+                "type": "text",
+                "label": "Project Key",
+                "required": True,
+            },
         ]
         errors = validate_plugin_config(schema, {})
         assert len(errors) == 1

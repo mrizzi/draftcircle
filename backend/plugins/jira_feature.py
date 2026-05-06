@@ -74,6 +74,7 @@ class JiraFeaturePlugin(OutputPlugin):
             "name": "summary",
             "type": "text",
             "label": "Summary",
+            "required": True,
             "default": "DraftCircle Document",
         },
         {

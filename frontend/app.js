@@ -958,11 +958,14 @@ function renderPluginFields(schema) {
   while (container.firstChild) container.removeChild(container.firstChild);
   if (!schema || schema.length === 0) return;
   schema.forEach(function(field) {
+    var fieldId = 'plugin-field-' + field.name;
     var label = document.createElement('label');
     label.textContent = field.label;
+    label.htmlFor = fieldId;
     container.appendChild(label);
     if (field.type === 'select') {
       var select = document.createElement('select');
+      select.id = fieldId;
       select.dataset.fieldName = field.name;
       if (field.required) select.required = true;
       if (!field.required) {
@@ -982,6 +985,7 @@ function renderPluginFields(schema) {
     } else {
       var input = document.createElement('input');
       input.type = 'text';
+      input.id = fieldId;
       input.dataset.fieldName = field.name;
       if (field.placeholder) input.placeholder = field.placeholder;
       if (field.default) input.value = field.default;
@@ -1065,7 +1069,8 @@ async function handlePublish(e) {
     });
     if (!resp.ok) {
       const err = await resp.json().catch(() => ({ detail: resp.statusText }));
-      throw new Error(err.detail || resp.statusText);
+      var msg = Array.isArray(err.detail) ? err.detail.join('\n') : (err.detail || resp.statusText);
+      throw new Error(msg);
     }
 
     if (pluginMeta && pluginMeta.download) {

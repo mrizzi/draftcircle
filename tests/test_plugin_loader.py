@@ -131,6 +131,7 @@ class TestJiraConfigSchema:
         field = plugin.config_schema[1]
         assert field["name"] == "summary"
         assert field["type"] == "text"
+        assert field["required"] is True
         assert field["default"] == "DraftCircle Document"
 
     def test_jira_labels_field(self):

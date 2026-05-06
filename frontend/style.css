@@ -19,6 +19,8 @@
   --badge-skipped: #d1d5db;
   --diff-add: #dcfce7;
   --diff-remove: #fee2e2;
+  --diff-word-add: #bbf7d0;
+  --diff-word-remove: #fecaca;
   --panel-width: 480px;
 }
 
@@ -195,6 +197,22 @@ body {
 .diff-current { background: var(--diff-remove); }
 .diff-proposed { background: var(--diff-add); }
 .proposal-actions { display: flex; gap: 0.5rem; }
+
+.diff-toggle { display: flex; justify-content: flex-end; margin-bottom: 0.5rem; }
+.diff-toggle button { padding: 0.25rem 0.6rem; font-size: 0.75rem; font-weight: 500; border: 1px solid var(--border); background: var(--bg); color: var(--text-secondary); cursor: pointer; transition: background 0.15s, color 0.15s; }
+.diff-toggle button:first-child { border-radius: 4px 0 0 4px; }
+.diff-toggle button:last-child { border-radius: 0 4px 4px 0; border-left: none; }
+.diff-toggle button.active { background: var(--text); color: white; border-color: var(--text); }
+
+.diff-unified { font-size: 0.85rem; line-height: 1.6; background: white; border: 1px solid var(--border); border-radius: 4px; padding: 0.75rem; margin-bottom: 0.75rem; max-height: 400px; overflow-y: auto; }
+.diff-word-added { background: var(--diff-word-add); padding: 0 2px; border-radius: 2px; }
+.diff-word-removed { background: var(--diff-word-remove); padding: 0 2px; border-radius: 2px; text-decoration: line-through; }
+.diff-collapsed { text-align: center; color: var(--text-secondary); font-size: 0.8rem; padding: 0.4rem 0; margin: 0.5rem 0; border-top: 1px dashed var(--border); border-bottom: 1px dashed var(--border); cursor: pointer; user-select: none; }
+.diff-collapsed:hover { background: var(--bg); }
+.diff-paragraph { margin-bottom: 0.5rem; }
+.diff-paragraph:last-child { margin-bottom: 0; }
+.diff-paragraph-added { background: var(--diff-add); border-radius: 3px; padding: 0.25rem 0.4rem; }
+.diff-paragraph-removed { background: var(--diff-remove); border-radius: 3px; padding: 0.25rem 0.4rem; text-decoration: line-through; }
 
 .modal { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 200; }
 .modal-content { background: var(--surface); border-radius: 12px; padding: 1.5rem; max-width: 560px; width: 90%; max-height: 80vh; overflow-y: auto; }

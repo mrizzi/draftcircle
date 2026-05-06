@@ -672,6 +672,99 @@ function renderReviewArea() {
   commentBtn.disabled = commentDisabled;
 }
 
+function buildUnifiedDiff(oldText, newText) {
+  const container = document.createElement('div');
+  container.className = 'diff-unified';
+
+  const oldParagraphs = (oldText || '').split(/\n\n+/);
+  const newParagraphs = (newText || '').split(/\n\n+/);
+  const maxLen = Math.max(oldParagraphs.length, newParagraphs.length);
+
+  const elements = [];
+  let unchangedRun = [];
+
+  function flushUnchanged() {
+    if (unchangedRun.length === 0) return;
+    const collapsed = document.createElement('div');
+    collapsed.className = 'diff-collapsed';
+    const count = unchangedRun.length;
+    collapsed.textContent = '— ' + count + ' unchanged paragraph' + (count > 1 ? 's' : '') + ' —';
+    const hiddenParagraphs = unchangedRun.slice();
+    collapsed.addEventListener('click', () => {
+      if (collapsed.nextSibling && collapsed.nextSibling.classList &&
+          collapsed.nextSibling.classList.contains('diff-collapsed-content')) {
+        collapsed.nextSibling.remove();
+        collapsed.textContent = '— ' + count + ' unchanged paragraph' + (count > 1 ? 's' : '') + ' —';
+        return;
+      }
+      const expanded = document.createElement('div');
+      expanded.className = 'diff-collapsed-content';
+      hiddenParagraphs.forEach(text => {
+        const p = document.createElement('div');
+        p.className = 'diff-paragraph';
+        p.textContent = text;
+        expanded.appendChild(p);
+      });
+      collapsed.after(expanded);
+      collapsed.textContent = '— collapse —';
+    });
+    elements.push(collapsed);
+    unchangedRun = [];
+  }
+
+  for (let i = 0; i < maxLen; i++) {
+    const oldP = i < oldParagraphs.length ? oldParagraphs[i] : null;
+    const newP = i < newParagraphs.length ? newParagraphs[i] : null;
+
+    if (oldP !== null && newP !== null && oldP === newP) {
+      unchangedRun.push(oldP);
+      continue;
+    }
+
+    flushUnchanged();
+
+    if (oldP !== null && newP === null) {
+      const p = document.createElement('div');
+      p.className = 'diff-paragraph diff-paragraph-removed';
+      p.textContent = oldP;
+      elements.push(p);
+    } else if (oldP === null && newP !== null) {
+      const p = document.createElement('div');
+      p.className = 'diff-paragraph diff-paragraph-added';
+      p.textContent = newP;
+      elements.push(p);
+    } else {
+      const p = document.createElement('div');
+      p.className = 'diff-paragraph';
+      const diff = Diff.diffWords(oldP, newP);
+      diff.forEach(part => {
+        const span = document.createElement('span');
+        if (part.added) {
+          span.className = 'diff-word-added';
+        } else if (part.removed) {
+          span.className = 'diff-word-removed';
+        }
+        span.textContent = part.value;
+        p.appendChild(span);
+      });
+      elements.push(p);
+    }
+  }
+
+  flushUnchanged();
+
+  if (elements.length === 0) {
+    const p = document.createElement('div');
+    p.className = 'diff-paragraph';
+    p.style.color = 'var(--text-secondary)';
+    p.textContent = 'No changes';
+    elements.push(p);
+  }
+
+  elements.forEach(el => container.appendChild(el));
+  return container;
+}
+
 function buildProposalEl(proposal, currentContent, showActions) {
   const div = document.createElement('div');
   div.className = 'proposal';
@@ -694,8 +787,9 @@ function buildProposalEl(proposal, currentContent, showActions) {
   div.appendChild(summary);
 
   if (proposal.status === 'pending') {
-    const diffContainer = document.createElement('div');
-    diffContainer.className = 'proposal-diff';
+    const fullTextView = document.createElement('div');
+    fullTextView.className = 'proposal-diff';
+    fullTextView.style.display = 'none';
 
     const currentLabel = document.createElement('div');
     currentLabel.className = 'diff-label';
@@ -711,11 +805,39 @@ function buildProposalEl(proposal, currentContent, showActions) {
     proposedDiv.className = 'diff-content diff-proposed';
     proposedDiv.textContent = proposal.revised_text;
 
-    diffContainer.appendChild(currentLabel);
-    diffContainer.appendChild(currentDiv);
-    diffContainer.appendChild(proposedLabel);
-    diffContainer.appendChild(proposedDiv);
-    div.appendChild(diffContainer);
+    fullTextView.appendChild(currentLabel);
+    fullTextView.appendChild(currentDiv);
+    fullTextView.appendChild(proposedLabel);
+    fullTextView.appendChild(proposedDiv);
+
+    const unifiedView = buildUnifiedDiff(currentContent, proposal.revised_text);
+
+    const toggle = document.createElement('div');
+    toggle.className = 'diff-toggle';
+    const changesBtn = document.createElement('button');
+    changesBtn.textContent = 'Changes';
+    changesBtn.className = 'active';
+    const fullBtn = document.createElement('button');
+    fullBtn.textContent = 'Full text';
+
+    changesBtn.addEventListener('click', () => {
+      unifiedView.style.display = '';
+      fullTextView.style.display = 'none';
+      changesBtn.classList.add('active');
+      fullBtn.classList.remove('active');
+    });
+    fullBtn.addEventListener('click', () => {
+      unifiedView.style.display = 'none';
+      fullTextView.style.display = '';
+      fullBtn.classList.add('active');
+      changesBtn.classList.remove('active');
+    });
+
+    toggle.appendChild(changesBtn);
+    toggle.appendChild(fullBtn);
+    div.appendChild(toggle);
+    div.appendChild(unifiedView);
+    div.appendChild(fullTextView);
   }
 
   if (showActions && proposal.status === 'pending') {

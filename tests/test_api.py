@@ -550,10 +550,6 @@ class TestPublishValidation:
         uid = "alice"
         for section_id in ["overview", "details", "notes"]:
             client.post(
-                f"/api/sessions/{sid}/sections/{section_id}/content",
-                json={"user_id": uid, "content": "Approved content"},
-            )
-            client.post(
                 f"/api/sessions/{sid}/sections/{section_id}/approve",
                 json={"user_id": uid},
             )
@@ -571,10 +567,6 @@ class TestPublishValidation:
         sid = session_with_participant["id"]
         uid = "alice"
         for section_id in ["overview", "details", "notes"]:
-            client.post(
-                f"/api/sessions/{sid}/sections/{section_id}/content",
-                json={"user_id": uid, "content": "Content"},
-            )
             client.post(
                 f"/api/sessions/{sid}/sections/{section_id}/approve",
                 json={"user_id": uid},

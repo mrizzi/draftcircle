@@ -105,8 +105,6 @@ class TestPluginConfigSchema:
         from backend.plugins.markdown import Plugin
 
         plugin = Plugin()
-        # Markdown plugin will get its own schema in Task 2,
-        # but the base class default should be a list
         assert isinstance(plugin.config_schema, list)
 
 

@@ -58,48 +58,29 @@ class TestCreateSessionForm:
         )
 
     def test_button_shows_progress_during_draft_generation(self, page, base_url):
+        """
+        Test that session creation completes.
+        Draft generation now happens asynchronously via background task,
+        and progress is shown via WebSocket in the activity log panel
+        (not in the button text - removed NDJSON streaming).
+        """
         page.goto(base_url)
         page.click("#create-session-btn")
         expect(page.locator(".section-owner-row")).to_have_count(3)
 
         page.fill("#seed-text", "Generate drafts for progress test.")
 
-        progress_texts = []
+        page.click("#create-session-form button[type='submit']")
 
-        def capture_mutations():
-            return page.evaluate("""() => {
-                return new Promise(resolve => {
-                    const btn = document.querySelector('#create-session-form button[type="submit"]');
-                    const texts = [];
-                    const observer = new MutationObserver(() => {
-                        const t = btn.textContent.trim();
-                        if (t && (texts.length === 0 || texts[texts.length - 1] !== t)) {
-                            texts.push(t);
-                        }
-                    });
-                    observer.observe(btn, { childList: true, characterData: true, subtree: true });
-                    btn.click();
-                    // Wait for the button to return to normal (form submission completes)
-                    const check = setInterval(() => {
-                        if (btn.textContent.trim() === 'Create Session' && texts.length > 1) {
-                            clearInterval(check);
-                            observer.disconnect();
-                            resolve(texts);
-                        }
-                    }, 200);
-                    // Timeout after 60s
-                    setTimeout(() => { clearInterval(check); observer.disconnect(); resolve(texts); }, 60000);
-                });
-            }""")
+        # Wait for the workspace view to load (after session creation)
+        expect(page.locator("#view-workspace")).to_have_class("view active", timeout=10000)
 
-        progress_texts = capture_mutations()
+        # Verify the session was created with 3 sections
+        expect(page.locator('.sidebar-item')).to_have_count(3)
 
-        assert len(progress_texts) >= 2, (
-            f"Expected progress updates, got: {progress_texts}"
-        )
-        assert any("Generating" in t or "Drafted" in t for t in progress_texts), (
-            f"No draft progress message found in: {progress_texts}"
-        )
+        # The session should be created successfully (sections start in "draft" status)
+        # Drafting happens in background, so we just verify session creation worked
+        expect(page.locator('#section-list .badge-draft')).to_have_count(3, timeout=5000)
 
     def test_required_unassigned_auto_assigns_to_coordinator(self, page, base_url):
         page.goto(base_url)

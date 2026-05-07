@@ -37,6 +37,9 @@ const state = {
   userId: null,
   token: null,
   ws: null,
+  aiLogOpen: false,
+  aiLogHasNew: false,
+  aiLogAutoOpened: false,
 };
 
 // --- Utilities ---
@@ -69,6 +72,54 @@ function formatTime(iso) {
   return d.toLocaleString(undefined, {
     month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
   });
+}
+
+function appendAiLog(text, className) {
+  const entries = document.getElementById('ai-log-entries');
+  if (!entries) return;
+
+  const entry = document.createElement('div');
+  entry.className = 'ai-log-entry' + (className ? ' ' + className : '');
+  entry.textContent = text;
+  entries.appendChild(entry);
+
+  const body = document.getElementById('ai-log-body');
+  if (body) {
+    const isScrolledToBottom = body.scrollHeight - body.scrollTop - body.clientHeight < 30;
+    if (isScrolledToBottom) body.scrollTop = body.scrollHeight;
+  }
+}
+
+function showAiLogPanel() {
+  const panel = document.getElementById('ai-log-panel');
+  if (!panel) return;
+  panel.style.display = '';
+}
+
+function toggleAiLog() {
+  const panel = document.getElementById('ai-log-panel');
+  if (!panel) return;
+  state.aiLogOpen = !state.aiLogOpen;
+  panel.classList.toggle('ai-log-collapsed', !state.aiLogOpen);
+  if (state.aiLogOpen) {
+    state.aiLogHasNew = false;
+    document.getElementById('ai-log-dot').style.display = 'none';
+  }
+}
+
+function clearAiLog() {
+  const entries = document.getElementById('ai-log-entries');
+  if (entries) entries.textContent = '';
+  state.aiLogAutoOpened = false;
+  state.aiLogHasNew = false;
+  state.aiLogOpen = false;
+  const panel = document.getElementById('ai-log-panel');
+  if (panel) {
+    panel.classList.add('ai-log-collapsed');
+    panel.style.display = 'none';
+  }
+  const dot = document.getElementById('ai-log-dot');
+  if (dot) dot.style.display = 'none';
 }
 
 // --- Session List ---
@@ -274,9 +325,8 @@ async function handleCreateSession(e) {
   });
 
   try {
-    const resp = await fetch(API + '/sessions', {
+    const session = await apiFetch('/sessions', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         template: slug,
         coordinator: coordinatorId,
@@ -284,40 +334,6 @@ async function handleCreateSession(e) {
         seed_text: seedText || undefined,
       }),
     });
-
-    if (!resp.ok) {
-      const err = await resp.json().catch(() => ({ detail: resp.statusText }));
-      throw new Error(err.detail || resp.statusText);
-    }
-
-    const contentType = resp.headers.get('content-type') || '';
-    let session;
-
-    if (contentType.includes('ndjson')) {
-      const reader = resp.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop();
-        for (const line of lines) {
-          if (!line.trim()) continue;
-          const msg = JSON.parse(line);
-          if (msg.type === 'progress') {
-            const textNode = submitBtn.lastChild;
-            if (textNode && textNode.nodeType === 3) textNode.textContent = msg.message;
-          } else if (msg.type === 'done') {
-            session = msg.session;
-          }
-        }
-      }
-    } else {
-      session = await resp.json();
-    }
 
     if (session) {
       showInviteLinks(session);
@@ -392,6 +408,7 @@ async function openSession(sessionId) {
   state.sectionComments = {};
   state.sectionProposals = {};
   state.activeSection = null;
+  clearAiLog();
 
   const meta = state.currentSession.section_meta;
   await Promise.all(
@@ -1131,7 +1148,42 @@ async function handleWsMessage(msg) {
 
   const sectionId = msg.section_id;
 
-  if (msg.type === 'comment_added' && sectionId) {
+  if (msg.type === 'ai_activity') {
+    showAiLogPanel();
+    if (!state.aiLogAutoOpened) {
+      state.aiLogAutoOpened = true;
+      state.aiLogOpen = true;
+      document.getElementById('ai-log-panel').classList.remove('ai-log-collapsed');
+    }
+    if (!state.aiLogOpen) {
+      state.aiLogHasNew = true;
+      document.getElementById('ai-log-dot').style.display = '';
+    }
+    appendAiLog(msg.text, msg.error ? 'error' : '');
+  } else if (msg.type === 'ai_complete') {
+    appendAiLog('AI processing complete.', 'complete');
+  } else if (msg.type === 'drafts_started') {
+    showAiLogPanel();
+    appendAiLog('Generating drafts...', '');
+    state.currentSession = await apiFetch(sessionPath(sid));
+    renderSidebar();
+  } else if (msg.type === 'section_drafted' && sectionId) {
+    appendAiLog('Drafted: ' + sectionId, '');
+    state.currentSession = await apiFetch(sessionPath(sid));
+    state.sectionContent[sectionId] = await apiFetch('/sessions/' + sid + '/sections/' + sectionId);
+    renderSidebar();
+    if (state.activeSection === sectionId) renderReviewArea();
+  } else if (msg.type === 'drafts_complete') {
+    appendAiLog('All drafts complete.', 'complete');
+    state.currentSession = await apiFetch(sessionPath(sid));
+    updateHeader();
+    renderSidebar();
+  } else if (msg.type === 'drafts_failed') {
+    appendAiLog(msg.message || 'Draft generation failed.', 'error');
+    state.currentSession = await apiFetch(sessionPath(sid));
+    updateHeader();
+    renderSidebar();
+  } else if (msg.type === 'comment_added' && sectionId) {
     state.sectionComments[sectionId] = await apiFetch('/sessions/' + sid + '/sections/' + sectionId + '/comments');
     if (state.activeSection === sectionId) renderReviewArea();
   } else if (msg.type === 'proposal_created' && sectionId) {
@@ -1230,6 +1282,7 @@ async function init() {
     };
     reader.readAsText(file);
   });
+  document.getElementById('ai-log-toggle').addEventListener('click', toggleAiLog);
 
   if (route.view === 'workspace' && route.sessionId) {
     state.templates = await apiFetch('/templates');

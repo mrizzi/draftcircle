@@ -99,11 +99,38 @@ class TestAppendFlushLoad:
 
 class TestLoad:
     @pytest.mark.asyncio
+    async def test_load_includes_pending_without_flush(self, data_repo):
+        git = GitStore(data_repo)
+        store = GitSessionStore(git, "test-session")
+        key = make_key()
+        entries = make_entries("unflushed")
+
+        await store.append(key, entries)
+        loaded = await store.load(key)
+        assert loaded == entries
+
+    @pytest.mark.asyncio
     async def test_returns_none_for_missing(self, data_repo):
         git = GitStore(data_repo)
         store = GitSessionStore(git, "test-session")
         result = await store.load(make_key())
         assert result is None
+
+    @pytest.mark.asyncio
+    async def test_flush_handles_existing_without_trailing_newline(self, data_repo):
+        git = GitStore(data_repo)
+        path = "sessions/test-session/agent/proj/sess-001/transcript.jsonl"
+        git.commit("seed", {path: '{"type":"old","uuid":"u0"}'})
+
+        store = GitSessionStore(git, "test-session")
+        key = make_key()
+        await store.append(key, make_entries("new"))
+        store.flush()
+
+        loaded = await store.load(key)
+        assert len(loaded) == 2
+        assert loaded[0]["type"] == "old"
+        assert loaded[1]["text"] == "new"
 
     @pytest.mark.asyncio
     async def test_returns_none_for_empty_file(self, data_repo):
@@ -220,6 +247,16 @@ class TestDelete:
         loaded_main = await store.load(main_key)
         assert loaded_main is not None
         assert await store.load(sub_key) is None
+
+    @pytest.mark.asyncio
+    async def test_delete_clears_pending_without_flush(self, data_repo):
+        git = GitStore(data_repo)
+        store = GitSessionStore(git, "test-session")
+        key = make_key()
+        await store.append(key, make_entries("pending"))
+
+        await store.delete(key)
+        assert await store.load(key) is None
 
     @pytest.mark.asyncio
     async def test_delete_missing_is_noop(self, data_repo):

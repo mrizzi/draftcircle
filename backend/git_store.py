@@ -49,6 +49,33 @@ class GitStore:
 
         return str(oid)
 
+    def delete_files(self, message: str, paths: list[str]) -> str:
+        for rel_path in paths:
+            full_path = self._check_path(rel_path)
+            if full_path.exists():
+                full_path.unlink()
+
+        index = self.repo.index
+        index.read()
+        for rel_path in paths:
+            try:
+                index.remove(rel_path)
+            except (KeyError, OSError):
+                pass
+        index.write()
+
+        tree_oid = index.write_tree()
+        sig = pygit2.Signature("DraftCircle", "draftcircle@localhost")
+
+        parents = []
+        if not self.repo.head_is_unborn:
+            parents = [self.repo.head.target]
+
+        oid = self.repo.create_commit(
+            "refs/heads/main", sig, sig, message, tree_oid, parents
+        )
+        return str(oid)
+
     def read_file(self, path: str) -> str | None:
         full_path = self._check_path(path)
         if not full_path.exists():

@@ -240,6 +240,60 @@ class TestGenerateDrafts:
         assert activity[0]["text"] == "Analyzing "
         assert activity[0]["section_id"] is None
 
+    @pytest.mark.asyncio
+    async def test_event_ordering(self, orchestrator):
+        template = Template.model_validate(SAMPLE_TEMPLATE)
+
+        with patch("backend.ai_orchestrator.query") as mock_query:
+            mock_query.return_value = mock_agent_messages(
+                tool_calls=[
+                    (
+                        "write_section_draft",
+                        {"section_id": "overview", "content": "d"},
+                    ),
+                ],
+                stream_text=["thinking..."],
+            )
+            events = await collect_events(
+                orchestrator.generate_drafts(
+                    draftcircle_session_id="test-session",
+                    agent_session_id=None,
+                    template=template,
+                    seed_content="Seed.",
+                )
+            )
+
+        types = [e["type"] for e in events]
+        assert types.index("ai_activity") < types.index("section_drafted")
+        assert types.index("section_drafted") < types.index("drafts_complete")
+        assert types[-1] == "drafts_complete"
+
+    @pytest.mark.asyncio
+    async def test_yields_unknown_section_id(self, orchestrator):
+        template = Template.model_validate(SAMPLE_TEMPLATE)
+
+        with patch("backend.ai_orchestrator.query") as mock_query:
+            mock_query.return_value = mock_agent_messages(
+                tool_calls=[
+                    (
+                        "write_section_draft",
+                        {"section_id": "bogus", "content": "x"},
+                    ),
+                ],
+            )
+            events = await collect_events(
+                orchestrator.generate_drafts(
+                    draftcircle_session_id="test-session",
+                    agent_session_id=None,
+                    template=template,
+                    seed_content="Seed.",
+                )
+            )
+
+        drafted = [e for e in events if e["type"] == "section_drafted"]
+        assert len(drafted) == 1
+        assert drafted[0]["section_id"] == "bogus"
+
 
 class TestProcessComment:
     @pytest.mark.asyncio
@@ -561,6 +615,34 @@ class TestProcessComment:
         activity = [e for e in events if e["type"] == "ai_activity"]
         assert len(activity) == 1
         assert activity[0]["text"] == "visible"
+
+    @pytest.mark.asyncio
+    async def test_event_ordering(self, orchestrator):
+        with patch("backend.ai_orchestrator.query") as mock_query:
+            mock_query.return_value = mock_agent_messages(
+                tool_calls=[("post_reply", {"text": "noted"})],
+                stream_text=["thinking..."],
+            )
+            events = await collect_events(
+                orchestrator.process_comment(
+                    session_id="test-session",
+                    section_id="overview",
+                    section_title="Overview",
+                    section_guidance="g",
+                    current_draft="Draft.",
+                    comment_thread=[],
+                    new_comment_author="alice",
+                    new_comment_text="Comment",
+                )
+            )
+
+        types = [e["type"] for e in events]
+        assert all(
+            i < types.index("ai_complete")
+            for i, t in enumerate(types)
+            if t == "ai_activity"
+        )
+        assert types[-1] == "ai_complete"
 
 
 class TestResultDataclasses:

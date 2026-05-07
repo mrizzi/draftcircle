@@ -22,7 +22,6 @@ class GitSessionStore:
         session_id = key["session_id"]
         base_dir = self._agent_dir()
 
-        # Include project_key and session_id in path for isolation
         key_prefix = f"{project_key}/{session_id}"
 
         subpath = key.get("subpath")
@@ -40,7 +39,6 @@ class GitSessionStore:
         path = self._entry_path(key)
         entries: list[SessionStoreEntry] = []
 
-        # Load committed entries from git
         content = self._git.read_file(path)
         if content:
             for line in content.splitlines():
@@ -48,7 +46,6 @@ class GitSessionStore:
                 if line:
                     entries.append(json.loads(line))
 
-        # Append any pending unflushed entries
         pending = self._pending.get(path, [])
         entries.extend(pending)
 
@@ -58,9 +55,7 @@ class GitSessionStore:
         subpath = key.get("subpath")
         if subpath:
             path = self._entry_path(key)
-            # Clear pending entries for this specific subpath
             self._pending.pop(path, None)
-            # Delete committed file if it exists
             if self._git.file_exists(path):
                 self._git.delete_files(
                     f"agent: delete transcript {subpath}",
@@ -68,19 +63,16 @@ class GitSessionStore:
                 )
             return
 
-        # Deleting main transcript - need to cascade to all subpaths
         project_key = key["project_key"]
         session_id = key["session_id"]
         key_prefix = f"{project_key}/{session_id}"
         agent_dir = self._agent_dir()
         prefix_dir = f"{agent_dir}/{key_prefix}"
 
-        # Clear all pending entries that match this key prefix
         paths_to_remove = [p for p in self._pending if p.startswith(prefix_dir + "/")]
         for p in paths_to_remove:
             del self._pending[p]
 
-        # Delete all committed files under this key prefix
         all_files: list[str] = []
         for name in self._git.list_directory(prefix_dir):
             child = f"{prefix_dir}/{name}"

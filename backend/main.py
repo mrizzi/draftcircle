@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 import os
@@ -8,10 +9,10 @@ from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
-from starlette.responses import JSONResponse, Response, StreamingResponse
+from starlette.responses import JSONResponse, Response
 
 from backend.git_store import GitStore
-from backend.models import ParticipantInput, SessionStatus, User
+from backend.models import ParticipantInput, SectionStatus, SessionStatus, User
 from backend.plugin_loader import list_plugins, load_plugin, validate_plugin_config
 from backend.session_manager import SessionManager
 from backend.template_loader import TemplateLoader
@@ -139,70 +140,87 @@ def create_app(data_repo_path: str | None = None) -> FastAPI:
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
 
-        if not (req.seed_text and ai):
-            result = sessions.get_session(session.id)
-            return JSONResponse(result.model_dump(mode="json"), status_code=201)
+        if req.seed_text and ai:
+            template = templates.get_template(req.template)
 
-        template = templates.get_template(req.template)
+            async def draft_in_background():
+                try:
+                    sessions.begin_drafting(session.id)
+                    await ws_manager.broadcast(
+                        session.id,
+                        {"type": "drafts_started", "session_id": session.id},
+                    )
 
-        async def stream_drafts():
-            yield (
-                json.dumps({"type": "progress", "message": "Generating drafts..."})
-                + "\n"
-            )
-            try:
-                drafts, agent_session_id = await ai.generate_drafts(
-                    draftcircle_session_id=session.id,
-                    agent_session_id=session.agent_session_id,
-                    template=template,
-                    seed_content=req.seed_text,
-                )
-                draft_files = {}
-                for draft in drafts:
-                    meta = session.section_meta.get(draft.section_id)
-                    if meta:
-                        section_path = (
-                            f"sessions/{session.id}/sections/{meta.filename}.md"
+                    agent_session_id = None
+                    async for event in ai.generate_drafts(
+                        draftcircle_session_id=session.id,
+                        agent_session_id=session.agent_session_id,
+                        template=template,
+                        seed_content=req.seed_text,
+                    ):
+                        if event["type"] == "ai_activity":
+                            await ws_manager.broadcast(session.id, event)
+                        elif event["type"] == "section_drafted":
+                            meta = session.section_meta.get(
+                                event["section_id"]
+                            )
+                            if meta:
+                                section_path = (
+                                    f"sessions/{session.id}/sections/"
+                                    f"{meta.filename}.md"
+                                )
+                                git.commit(
+                                    f"draft: AI generated "
+                                    f"{event['section_id']} for {session.id}",
+                                    {section_path: event["content"]},
+                                )
+                                sessions.set_section_status(
+                                    session.id,
+                                    event["section_id"],
+                                    SectionStatus.DRAFT,
+                                )
+                                await ws_manager.broadcast(
+                                    session.id,
+                                    {
+                                        "type": "section_drafted",
+                                        "section_id": event["section_id"],
+                                        "status": "draft",
+                                    },
+                                )
+                        elif event["type"] == "drafts_complete":
+                            agent_session_id = event.get("session_id")
+
+                    if agent_session_id:
+                        sessions.set_agent_session_id(
+                            session.id, agent_session_id
                         )
-                        draft_files[section_path] = draft.content
-                    yield (
-                        json.dumps(
-                            {
-                                "type": "progress",
-                                "message": f"Drafted: {draft.section_id}",
-                            }
-                        )
-                        + "\n"
+                    await ws_manager.broadcast(
+                        session.id,
+                        {
+                            "type": "drafts_complete",
+                            "session_id": session.id,
+                        },
                     )
-                if draft_files:
-                    git.commit(
-                        f"draft: AI generated drafts for {session.id}",
-                        draft_files,
+                except Exception:
+                    logger.warning(
+                        "AI draft generation failed for %s",
+                        session.id,
+                        exc_info=True,
                     )
-                if agent_session_id:
-                    sessions.set_agent_session_id(session.id, agent_session_id)
-            except Exception:
-                logger.warning(
-                    "AI draft generation failed for %s",
-                    session.id,
-                    exc_info=True,
-                )
-                yield (
-                    json.dumps(
-                        {"type": "progress", "message": "Draft generation failed"}
+                    sessions.recover_drafting(session.id)
+                    await ws_manager.broadcast(
+                        session.id,
+                        {
+                            "type": "drafts_failed",
+                            "session_id": session.id,
+                            "message": "Draft generation encountered an error.",
+                        },
                     )
-                    + "\n"
-                )
 
-            result = sessions.get_session(session.id)
-            yield (
-                json.dumps({"type": "done", "session": result.model_dump(mode="json")})
-                + "\n"
-            )
+            asyncio.create_task(draft_in_background())
 
-        return StreamingResponse(
-            stream_drafts(), media_type="application/x-ndjson", status_code=201
-        )
+        result = sessions.get_session(session.id)
+        return JSONResponse(result.model_dump(mode="json"), status_code=201)
 
     def _strip_tokens(session_data: dict) -> dict:
         for p in session_data.get("participants", []):
@@ -272,7 +290,9 @@ def create_app(data_repo_path: str | None = None) -> FastAPI:
                 )
                 meta = session.section_meta[req.section_id]
                 current_draft = (
-                    git.read_file(f"sessions/{session_id}/sections/{meta.filename}.md")
+                    git.read_file(
+                        f"sessions/{session_id}/sections/{meta.filename}.md"
+                    )
                     or ""
                 )
                 thread = [
@@ -280,57 +300,94 @@ def create_app(data_repo_path: str | None = None) -> FastAPI:
                     for c in sessions.get_comments(session_id, req.section_id)
                 ]
 
-                result, agent_session_id = await ai.process_comment(
+                async for event in ai.process_comment(
                     session_id=session_id,
                     section_id=req.section_id,
-                    section_title=section_def.title if section_def else req.section_id,
-                    section_guidance=section_def.guidance if section_def else "",
+                    section_title=(
+                        section_def.title if section_def else req.section_id
+                    ),
+                    section_guidance=(
+                        section_def.guidance if section_def else ""
+                    ),
                     current_draft=current_draft,
                     comment_thread=thread[:-1],
                     new_comment_author=req.author,
                     new_comment_text=req.text,
                     system_prompt=template.ai_context,
                     agent_session_id=session.agent_session_id,
-                )
+                ):
+                    if event["type"] == "ai_activity":
+                        await ws_manager.broadcast(session_id, event)
+                    elif event["type"] == "ai_complete":
+                        result = event["result"]
+                        agent_session_id = event["session_id"]
 
-                if agent_session_id and agent_session_id != session.agent_session_id:
-                    sessions.set_agent_session_id(session_id, agent_session_id)
+                        if (
+                            agent_session_id
+                            and agent_session_id != session.agent_session_id
+                        ):
+                            sessions.set_agent_session_id(
+                                session_id, agent_session_id
+                            )
 
-                if isinstance(result, ProposalResult):
-                    proposal = sessions.create_proposal(
-                        session_id=session_id,
-                        section_id=req.section_id,
-                        triggered_by_comment=comment.id,
-                        revised_text=result.revised_text,
-                        summary=result.summary,
-                    )
-                    await ws_manager.broadcast(
-                        session_id,
-                        {
-                            "type": "proposal_created",
-                            "section_id": req.section_id,
-                            "proposal": proposal.model_dump(mode="json"),
-                        },
-                    )
-                elif isinstance(result, ReplyResult):
-                    reply = sessions.add_comment(
-                        session_id=session_id,
-                        section_id=req.section_id,
-                        author="ai",
-                        text=result.text,
-                    )
-                    await ws_manager.broadcast(
-                        session_id,
-                        {
-                            "type": "comment_added",
-                            "section_id": req.section_id,
-                            "comment": reply.model_dump(mode="json"),
-                        },
-                    )
+                        if isinstance(result, ProposalResult):
+                            proposal = sessions.create_proposal(
+                                session_id=session_id,
+                                section_id=req.section_id,
+                                triggered_by_comment=comment.id,
+                                revised_text=result.revised_text,
+                                summary=result.summary,
+                            )
+                            await ws_manager.broadcast(
+                                session_id,
+                                {
+                                    "type": "proposal_created",
+                                    "section_id": req.section_id,
+                                    "proposal": proposal.model_dump(
+                                        mode="json"
+                                    ),
+                                },
+                            )
+                        elif isinstance(result, ReplyResult):
+                            reply = sessions.add_comment(
+                                session_id=session_id,
+                                section_id=req.section_id,
+                                author="ai",
+                                text=result.text,
+                            )
+                            await ws_manager.broadcast(
+                                session_id,
+                                {
+                                    "type": "comment_added",
+                                    "section_id": req.section_id,
+                                    "comment": reply.model_dump(mode="json"),
+                                },
+                            )
             except Exception:
                 logger.warning(
-                    "AI comment processing failed for %s", session_id, exc_info=True
+                    "AI comment processing failed for %s",
+                    session_id,
+                    exc_info=True,
                 )
+                await ws_manager.broadcast(
+                    session_id,
+                    {
+                        "type": "ai_activity",
+                        "section_id": req.section_id,
+                        "text": "AI processing encountered an error.",
+                        "error": True,
+                    },
+                )
+                try:
+                    sessions.add_comment(
+                        session_id,
+                        req.section_id,
+                        "ai",
+                        "I encountered an error processing this comment. "
+                        "Please try again.",
+                    )
+                except Exception:
+                    pass
 
         return comment
 

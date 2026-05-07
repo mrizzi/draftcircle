@@ -696,6 +696,16 @@ class TestSectionStatusTransitions:
         session = manager.get_session(session.id)
         assert session.section_meta["overview"].status == SectionStatus.IN_REVIEW
 
+    def test_skip_blocked_while_drafting(self, manager):
+        session = manager.create_session(
+            template_slug="test-template",
+            coordinator="alice",
+            participants=[],
+        )
+        manager.begin_drafting(session.id)
+        with pytest.raises(ValueError, match="cannot be skipped"):
+            manager.skip_section(session.id, "details", "alice")
+
     def test_set_section_status_unknown_section(self, manager):
         session = manager.create_session(
             template_slug="test-template",

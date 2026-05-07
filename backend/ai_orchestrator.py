@@ -150,7 +150,6 @@ class AIOrchestrator:
         self._section_locks: dict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
 
     async def _stream_query(self, prompt: str, opts: ClaudeAgentOptions):
-        content_blocks: list = []
         session_id: str | None = None
         async for message in query(prompt=prompt, options=opts):
             if isinstance(message, StreamEvent):
@@ -161,10 +160,12 @@ class AIOrchestrator:
                 ):
                     yield ("text_delta", event["delta"]["text"])
             elif isinstance(message, AssistantMessage):
-                content_blocks.extend(message.content)
+                for block in message.content:
+                    if isinstance(block, ToolUseBlock):
+                        yield ("tool_use", block)
             elif isinstance(message, ResultMessage):
                 session_id = message.session_id
-        yield ("result", (content_blocks, session_id))
+        yield ("done", session_id)
 
     async def _run_query_streaming(
         self,
@@ -236,7 +237,6 @@ class AIOrchestrator:
             f"{sections_text}"
         )
 
-        content_blocks = None
         result_session_id = None
 
         async for event_type, data in self._run_query_streaming(
@@ -248,18 +248,16 @@ class AIOrchestrator:
         ):
             if event_type == "text_delta":
                 yield {"type": "ai_activity", "section_id": None, "text": data}
-            elif event_type == "result":
-                content_blocks, result_session_id = data
-
-        for block in content_blocks or []:
-            if isinstance(block, ToolUseBlock) and block.name.endswith(
+            elif event_type == "tool_use" and data.name.endswith(
                 "write_section_draft"
             ):
                 yield {
                     "type": "section_drafted",
-                    "section_id": block.input["section_id"],
-                    "content": block.input["content"],
+                    "section_id": data.input["section_id"],
+                    "content": data.input["content"],
                 }
+            elif event_type == "done":
+                result_session_id = data
 
         yield {"type": "drafts_complete", "session_id": result_session_id}
 
@@ -297,7 +295,7 @@ class AIOrchestrator:
                 f"a draft change, use the post_reply tool."
             )
 
-            content_blocks = None
+            result = ReplyResult(text="I've noted your comment.")
             result_session_id = None
 
             async for event_type, data in self._run_query_streaming(
@@ -316,22 +314,16 @@ class AIOrchestrator:
                         "section_id": section_id,
                         "text": data,
                     }
-                elif event_type == "result":
-                    content_blocks, result_session_id = data
-
-            result = ReplyResult(text="I've noted your comment.")
-            for block in content_blocks or []:
-                if not isinstance(block, ToolUseBlock):
-                    continue
-                if block.name.endswith("propose_revision"):
-                    result = ProposalResult(
-                        revised_text=block.input["revised_text"],
-                        summary=block.input["summary"],
-                    )
-                    break
-                if block.name.endswith("post_reply"):
-                    result = ReplyResult(text=block.input["text"])
-                    break
+                elif event_type == "tool_use":
+                    if data.name.endswith("propose_revision"):
+                        result = ProposalResult(
+                            revised_text=data.input["revised_text"],
+                            summary=data.input["summary"],
+                        )
+                    elif data.name.endswith("post_reply"):
+                        result = ReplyResult(text=data.input["text"])
+                elif event_type == "done":
+                    result_session_id = data
 
             result_type = "proposal" if isinstance(result, ProposalResult) else "reply"
             yield {

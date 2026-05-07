@@ -498,7 +498,7 @@ class TestCoordinatorTokenAccess:
         for p in data["participants"]:
             assert "token" in p
 
-    def test_non_coordinator_tokens_stripped(self, client, populated_data_repo):
+    def test_authenticated_participant_sees_tokens(self, client, populated_data_repo):
         create_resp = client.post(
             "/api/sessions",
             json={
@@ -522,7 +522,7 @@ class TestCoordinatorTokenAccess:
         resp = client.get(f"/api/sessions/{sid}?token={bob_token}")
         data = resp.json()
         for p in data["participants"]:
-            assert "token" not in p
+            assert "token" in p
 
 
 class TestPluginEndpoints:

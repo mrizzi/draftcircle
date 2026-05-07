@@ -239,16 +239,15 @@ def create_app(data_repo_path: str | None = None) -> FastAPI:
         result["progress"] = sessions.get_progress(session_id)
         result["ready_to_publish"] = sessions.is_ready_to_publish(session_id)
 
-        is_coordinator = False
+        authenticated = False
         if token:
             for p in session.participants:
                 if p.token == token:
                     result["current_user_id"] = p.user_id
-                    if session.coordinator == p.user_id:
-                        is_coordinator = True
+                    authenticated = True
                     break
 
-        if not is_coordinator:
+        if not authenticated:
             _strip_tokens(result)
 
         return result

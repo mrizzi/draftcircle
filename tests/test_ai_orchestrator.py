@@ -503,6 +503,21 @@ class TestSessionStoreIntegration:
         assert retry_opts.resume is None
 
     @pytest.mark.asyncio
+    async def test_non_session_sdk_error_propagates(self, orchestrator, data_repo):
+        template = Template.model_validate(SAMPLE_TEMPLATE)
+
+        with patch("backend.ai_orchestrator.query") as mock_query:
+            mock_query.side_effect = ClaudeSDKError("rate limit exceeded")
+            with pytest.raises(ClaudeSDKError, match="rate limit exceeded"):
+                await orchestrator.generate_drafts(
+                    draftcircle_session_id="test-session",
+                    agent_session_id="some-session",
+                    template=template,
+                    seed_content="Seed.",
+                )
+        assert mock_query.call_count == 1
+
+    @pytest.mark.asyncio
     async def test_flush_called_on_error(self, orchestrator, data_repo):
         template = Template.model_validate(SAMPLE_TEMPLATE)
 

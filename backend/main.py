@@ -63,6 +63,11 @@ def create_app(data_repo_path: str | None = None) -> FastAPI:
     sessions = SessionManager(git, templates)
     ws_manager = WebSocketManager()
 
+    gitignore = repo_path / ".gitignore"
+    if not gitignore.exists() or ".claude-sdk/" not in gitignore.read_text():
+        with open(gitignore, "a") as f:
+            f.write("\n.claude-sdk/\n")
+
     ai = None
     try:
         from backend.ai_orchestrator import AIOrchestrator

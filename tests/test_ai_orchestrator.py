@@ -119,21 +119,24 @@ class TestGenerateDrafts:
                 ],
                 session_id="sess-123",
             )
-            drafts, sid = await orchestrator.generate_drafts(
-                draftcircle_session_id="test-session",
-                agent_session_id=None,
-                template=template,
-                seed_content="Feature X enables users to do Y.",
+            events = await collect_events(
+                orchestrator.generate_drafts(
+                    draftcircle_session_id="test-session",
+                    agent_session_id=None,
+                    template=template,
+                    seed_content="Feature X enables users to do Y.",
+                )
             )
 
-        assert len(drafts) == 3
-        assert drafts[0].section_id == "overview"
-        assert "Draft content" in drafts[0].content
-        assert drafts[1].section_id == "details"
-        assert drafts[2].section_id == "notes"
+        drafted = [e for e in events if e["type"] == "section_drafted"]
+        assert len(drafted) == 3
+        assert drafted[0]["section_id"] == "overview"
+        assert "Draft content" in drafted[0]["content"]
+        assert drafted[1]["section_id"] == "details"
+        assert drafted[2]["section_id"] == "notes"
 
     @pytest.mark.asyncio
-    async def test_returns_session_id(self, orchestrator):
+    async def test_yields_drafts_complete_with_session_id(self, orchestrator):
         template = Template.model_validate(SAMPLE_TEMPLATE)
 
         with patch("backend.ai_orchestrator.query") as mock_query:
@@ -146,14 +149,17 @@ class TestGenerateDrafts:
                 ],
                 session_id="sess-456",
             )
-            _, sid = await orchestrator.generate_drafts(
-                draftcircle_session_id="test-session",
-                agent_session_id=None,
-                template=template,
-                seed_content="Seed.",
+            events = await collect_events(
+                orchestrator.generate_drafts(
+                    draftcircle_session_id="test-session",
+                    agent_session_id=None,
+                    template=template,
+                    seed_content="Seed.",
+                )
             )
 
-        assert sid == "sess-456"
+        complete = next(e for e in events if e["type"] == "drafts_complete")
+        assert complete["session_id"] == "sess-456"
 
     @pytest.mark.asyncio
     async def test_sends_seed_and_template_context(self, orchestrator):
@@ -168,11 +174,13 @@ class TestGenerateDrafts:
                     ),
                 ],
             )
-            await orchestrator.generate_drafts(
-                draftcircle_session_id="test-session",
-                agent_session_id=None,
-                template=template,
-                seed_content="Seed material here",
+            await collect_events(
+                orchestrator.generate_drafts(
+                    draftcircle_session_id="test-session",
+                    agent_session_id=None,
+                    template=template,
+                    seed_content="Seed material here",
+                )
             )
 
             call_args = mock_query.call_args
@@ -191,14 +199,47 @@ class TestGenerateDrafts:
             mock_query.return_value = mock_agent_messages(
                 text="I can't generate drafts right now.",
             )
-            drafts, sid = await orchestrator.generate_drafts(
-                draftcircle_session_id="test-session",
-                agent_session_id=None,
-                template=template,
-                seed_content="Seed material",
+            events = await collect_events(
+                orchestrator.generate_drafts(
+                    draftcircle_session_id="test-session",
+                    agent_session_id=None,
+                    template=template,
+                    seed_content="Seed material",
+                )
             )
 
-        assert drafts == []
+        drafted = [e for e in events if e["type"] == "section_drafted"]
+        assert drafted == []
+        complete = next(e for e in events if e["type"] == "drafts_complete")
+        assert complete is not None
+
+    @pytest.mark.asyncio
+    async def test_yields_activity_events_with_stream_text(self, orchestrator):
+        template = Template.model_validate(SAMPLE_TEMPLATE)
+
+        with patch("backend.ai_orchestrator.query") as mock_query:
+            mock_query.return_value = mock_agent_messages(
+                tool_calls=[
+                    (
+                        "write_section_draft",
+                        {"section_id": "overview", "content": "draft"},
+                    ),
+                ],
+                stream_text=["Analyzing ", "the seed ", "material..."],
+            )
+            events = await collect_events(
+                orchestrator.generate_drafts(
+                    draftcircle_session_id="test-session",
+                    agent_session_id=None,
+                    template=template,
+                    seed_content="Seed.",
+                )
+            )
+
+        activity = [e for e in events if e["type"] == "ai_activity"]
+        assert len(activity) == 3
+        assert activity[0]["text"] == "Analyzing "
+        assert activity[0]["section_id"] is None
 
 
 class TestProcessComment:
@@ -216,19 +257,23 @@ class TestProcessComment:
                     ),
                 ],
             )
-            result, _ = await orchestrator.process_comment(
-                session_id="test-session",
-                section_id="nfrs",
-                section_title="Non-Functional Requirements",
-                section_guidance="Architecture characteristics and NFRs",
-                current_draft="Initial NFR draft.",
-                comment_thread=[],
-                new_comment_author="alice",
-                new_comment_text="We need rate limiting.",
+            events = await collect_events(
+                orchestrator.process_comment(
+                    session_id="test-session",
+                    section_id="nfrs",
+                    section_title="Non-Functional Requirements",
+                    section_guidance="Architecture characteristics and NFRs",
+                    current_draft="Initial NFR draft.",
+                    comment_thread=[],
+                    new_comment_author="alice",
+                    new_comment_text="We need rate limiting.",
+                )
             )
 
-        assert isinstance(result, ProposalResult)
-        assert "rate limiting" in result.revised_text
+        complete = next(e for e in events if e["type"] == "ai_complete")
+        assert complete["result_type"] == "proposal"
+        assert isinstance(complete["result"], ProposalResult)
+        assert "rate limiting" in complete["result"].revised_text
 
     @pytest.mark.asyncio
     async def test_returns_reply(self, orchestrator):
@@ -243,19 +288,23 @@ class TestProcessComment:
                     ),
                 ],
             )
-            result, _ = await orchestrator.process_comment(
-                session_id="test-session",
-                section_id="nfrs",
-                section_title="NFRs",
-                section_guidance="NFR guidance",
-                current_draft="Draft.",
-                comment_thread=[],
-                new_comment_author="bob",
-                new_comment_text="Is rate limiting covered?",
+            events = await collect_events(
+                orchestrator.process_comment(
+                    session_id="test-session",
+                    section_id="nfrs",
+                    section_title="NFRs",
+                    section_guidance="NFR guidance",
+                    current_draft="Draft.",
+                    comment_thread=[],
+                    new_comment_author="bob",
+                    new_comment_text="Is rate limiting covered?",
+                )
             )
 
-        assert isinstance(result, ReplyResult)
-        assert "rate limiting" in result.text
+        complete = next(e for e in events if e["type"] == "ai_complete")
+        assert complete["result_type"] == "reply"
+        assert isinstance(complete["result"], ReplyResult)
+        assert "rate limiting" in complete["result"].text
 
     @pytest.mark.asyncio
     async def test_includes_thread_in_prompt(self, orchestrator):
@@ -268,15 +317,17 @@ class TestProcessComment:
             mock_query.return_value = mock_agent_messages(
                 tool_calls=[("post_reply", {"text": "reply"})],
             )
-            await orchestrator.process_comment(
-                session_id="test-session",
-                section_id="overview",
-                section_title="Overview",
-                section_guidance="Write an overview",
-                current_draft="Draft.",
-                comment_thread=thread,
-                new_comment_author="alice",
-                new_comment_text="New comment",
+            await collect_events(
+                orchestrator.process_comment(
+                    session_id="test-session",
+                    section_id="overview",
+                    section_title="Overview",
+                    section_guidance="Write an overview",
+                    current_draft="Draft.",
+                    comment_thread=thread,
+                    new_comment_author="alice",
+                    new_comment_text="New comment",
+                )
             )
 
             call_args = mock_query.call_args
@@ -290,19 +341,22 @@ class TestProcessComment:
             mock_query.return_value = mock_agent_messages(
                 text="I'm not sure what to do here.",
             )
-            result, _ = await orchestrator.process_comment(
-                session_id="test-session",
-                section_id="overview",
-                section_title="Overview",
-                section_guidance="Write an overview",
-                current_draft="Draft.",
-                comment_thread=[],
-                new_comment_author="alice",
-                new_comment_text="Please revise",
+            events = await collect_events(
+                orchestrator.process_comment(
+                    session_id="test-session",
+                    section_id="overview",
+                    section_title="Overview",
+                    section_guidance="Write an overview",
+                    current_draft="Draft.",
+                    comment_thread=[],
+                    new_comment_author="alice",
+                    new_comment_text="Please revise",
+                )
             )
 
-        assert isinstance(result, ReplyResult)
-        assert result.text == "I've noted your comment."
+        complete = next(e for e in events if e["type"] == "ai_complete")
+        assert isinstance(complete["result"], ReplyResult)
+        assert complete["result"].text == "I've noted your comment."
 
     @pytest.mark.asyncio
     async def test_returns_session_id(self, orchestrator):
@@ -311,18 +365,21 @@ class TestProcessComment:
                 tool_calls=[("post_reply", {"text": "noted"})],
                 session_id="sess-789",
             )
-            _, sid = await orchestrator.process_comment(
-                session_id="test-session",
-                section_id="overview",
-                section_title="Overview",
-                section_guidance="Write an overview",
-                current_draft="Draft.",
-                comment_thread=[],
-                new_comment_author="alice",
-                new_comment_text="Comment",
+            events = await collect_events(
+                orchestrator.process_comment(
+                    session_id="test-session",
+                    section_id="overview",
+                    section_title="Overview",
+                    section_guidance="Write an overview",
+                    current_draft="Draft.",
+                    comment_thread=[],
+                    new_comment_author="alice",
+                    new_comment_text="Comment",
+                )
             )
 
-        assert sid == "sess-789"
+        complete = next(e for e in events if e["type"] == "ai_complete")
+        assert complete["session_id"] == "sess-789"
 
     @pytest.mark.asyncio
     async def test_passes_resume_id(self, orchestrator):
@@ -330,16 +387,18 @@ class TestProcessComment:
             mock_query.return_value = mock_agent_messages(
                 tool_calls=[("post_reply", {"text": "noted"})],
             )
-            await orchestrator.process_comment(
-                session_id="test-session",
-                section_id="overview",
-                section_title="Overview",
-                section_guidance="Write an overview",
-                current_draft="Draft.",
-                comment_thread=[],
-                new_comment_author="alice",
-                new_comment_text="Comment",
-                agent_session_id="existing-session-42",
+            await collect_events(
+                orchestrator.process_comment(
+                    session_id="test-session",
+                    section_id="overview",
+                    section_title="Overview",
+                    section_guidance="Write an overview",
+                    current_draft="Draft.",
+                    comment_thread=[],
+                    new_comment_author="alice",
+                    new_comment_text="Comment",
+                    agent_session_id="existing-session-42",
+                )
             )
 
             call_args = mock_query.call_args
@@ -378,29 +437,119 @@ class TestProcessComment:
         with patch("backend.ai_orchestrator.query") as mock_query:
             mock_query.side_effect = slow_query
             await asyncio.gather(
-                orchestrator.process_comment(
-                    "test-session",
-                    "overview",
-                    "Overview",
-                    "g",
-                    "Draft.",
-                    [],
-                    "alice",
-                    "comment 1",
+                collect_events(
+                    orchestrator.process_comment(
+                        "test-session", "overview", "Overview", "g",
+                        "Draft.", [], "alice", "comment 1",
+                    )
                 ),
-                orchestrator.process_comment(
-                    "test-session",
-                    "overview",
-                    "Overview",
-                    "g",
-                    "Draft.",
-                    [],
-                    "bob",
-                    "comment 2",
+                collect_events(
+                    orchestrator.process_comment(
+                        "test-session", "overview", "Overview", "g",
+                        "Draft.", [], "bob", "comment 2",
+                    )
                 ),
             )
 
         assert call_order == ["start", "end", "start", "end"]
+
+    @pytest.mark.asyncio
+    async def test_yields_activity_events(self, orchestrator):
+        with patch("backend.ai_orchestrator.query") as mock_query:
+            mock_query.return_value = mock_agent_messages(
+                tool_calls=[("post_reply", {"text": "noted"})],
+                stream_text=["Let me ", "think about ", "this..."],
+            )
+            events = await collect_events(
+                orchestrator.process_comment(
+                    session_id="test-session",
+                    section_id="overview",
+                    section_title="Overview",
+                    section_guidance="Write an overview",
+                    current_draft="Draft.",
+                    comment_thread=[],
+                    new_comment_author="alice",
+                    new_comment_text="Comment",
+                )
+            )
+
+        activity = [e for e in events if e["type"] == "ai_activity"]
+        assert len(activity) == 3
+        assert activity[0]["text"] == "Let me "
+        assert activity[0]["section_id"] == "overview"
+
+    @pytest.mark.asyncio
+    async def test_filters_tool_input_events(self, orchestrator):
+        tool_input_event = StreamEvent(
+            uuid="evt-tool",
+            session_id="test-session",
+            event={
+                "type": "content_block_delta",
+                "delta": {
+                    "type": "input_json_delta",
+                    "partial_json": '{"secret": "data"}',
+                },
+            },
+        )
+        tool_start_event = StreamEvent(
+            uuid="evt-start",
+            session_id="test-session",
+            event={
+                "type": "content_block_start",
+                "content_block": {"type": "tool_use"},
+            },
+        )
+        text_event = StreamEvent(
+            uuid="evt-text",
+            session_id="test-session",
+            event={
+                "type": "content_block_delta",
+                "delta": {"type": "text_delta", "text": "visible"},
+            },
+        )
+
+        async def custom_query(**kwargs):
+            yield text_event
+            yield tool_input_event
+            yield tool_start_event
+            yield AssistantMessage(
+                content=[
+                    ToolUseBlock(
+                        id="t1",
+                        name="mcp__draftcircle__post_reply",
+                        input={"text": "reply"},
+                    )
+                ],
+                model="claude-sonnet-4-6",
+            )
+            yield ResultMessage(
+                subtype="success",
+                duration_ms=100,
+                duration_api_ms=80,
+                is_error=False,
+                num_turns=1,
+                session_id="test-session",
+                result="",
+            )
+
+        with patch("backend.ai_orchestrator.query") as mock_query:
+            mock_query.return_value = custom_query()
+            events = await collect_events(
+                orchestrator.process_comment(
+                    session_id="test-session",
+                    section_id="overview",
+                    section_title="Overview",
+                    section_guidance="g",
+                    current_draft="Draft.",
+                    comment_thread=[],
+                    new_comment_author="alice",
+                    new_comment_text="Comment",
+                )
+            )
+
+        activity = [e for e in events if e["type"] == "ai_activity"]
+        assert len(activity) == 1
+        assert activity[0]["text"] == "visible"
 
 
 class TestResultDataclasses:
@@ -423,7 +572,9 @@ class TestResultDataclasses:
 
 class TestSessionStoreIntegration:
     @pytest.mark.asyncio
-    async def test_run_query_sets_session_store(self, orchestrator, data_repo):
+    async def test_run_query_sets_session_store_and_partial_messages(
+        self, orchestrator, data_repo
+    ):
         template = Template.model_validate(SAMPLE_TEMPLATE)
 
         with patch("backend.ai_orchestrator.query") as mock_query:
@@ -436,15 +587,18 @@ class TestSessionStoreIntegration:
                 ],
                 session_id="sess-001",
             )
-            await orchestrator.generate_drafts(
-                draftcircle_session_id="test-session",
-                agent_session_id=None,
-                template=template,
-                seed_content="Seed.",
+            await collect_events(
+                orchestrator.generate_drafts(
+                    draftcircle_session_id="test-session",
+                    agent_session_id=None,
+                    template=template,
+                    seed_content="Seed.",
+                )
             )
             opts = mock_query.call_args.kwargs["options"]
             assert opts.session_store is not None
             assert opts.env.get("CLAUDE_CONFIG_DIR") is not None
+            assert opts.include_partial_messages is True
 
     @pytest.mark.asyncio
     async def test_run_query_sets_resume(self, orchestrator, data_repo):
@@ -459,11 +613,13 @@ class TestSessionStoreIntegration:
                     ),
                 ],
             )
-            await orchestrator.generate_drafts(
-                draftcircle_session_id="test-session",
-                agent_session_id="existing-session-42",
-                template=template,
-                seed_content="Seed.",
+            await collect_events(
+                orchestrator.generate_drafts(
+                    draftcircle_session_id="test-session",
+                    agent_session_id="existing-session-42",
+                    template=template,
+                    seed_content="Seed.",
+                )
             )
             opts = mock_query.call_args.kwargs["options"]
             assert opts.resume == "existing-session-42"
@@ -484,16 +640,20 @@ class TestSessionStoreIntegration:
                     ),
                 ],
             )
-            await orchestrator.generate_drafts(
-                draftcircle_session_id="test-session",
-                agent_session_id=None,
-                template=template,
-                seed_content="Seed.",
+            await collect_events(
+                orchestrator.generate_drafts(
+                    draftcircle_session_id="test-session",
+                    agent_session_id=None,
+                    template=template,
+                    seed_content="Seed.",
+                )
             )
             mock_flush.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_stale_session_retries_without_resume(self, orchestrator, data_repo):
+    async def test_stale_session_retries_without_resume(
+        self, orchestrator, data_repo
+    ):
         template = Template.model_validate(SAMPLE_TEMPLATE)
         call_count = 0
 
@@ -516,15 +676,19 @@ class TestSessionStoreIntegration:
 
         with patch("backend.ai_orchestrator.query") as mock_query:
             mock_query.side_effect = query_side_effect
-            drafts, sid = await orchestrator.generate_drafts(
-                draftcircle_session_id="test-session",
-                agent_session_id="old-session",
-                template=template,
-                seed_content="Seed.",
+            events = await collect_events(
+                orchestrator.generate_drafts(
+                    draftcircle_session_id="test-session",
+                    agent_session_id="old-session",
+                    template=template,
+                    seed_content="Seed.",
+                )
             )
 
-        assert sid == "new-session"
-        assert len(drafts) == 1
+        complete = next(e for e in events if e["type"] == "drafts_complete")
+        assert complete["session_id"] == "new-session"
+        drafted = [e for e in events if e["type"] == "section_drafted"]
+        assert len(drafted) == 1
         assert mock_query.call_count == 2
         retry_opts = mock_query.call_args_list[1].kwargs["options"]
         assert retry_opts.resume is None
@@ -537,11 +701,13 @@ class TestSessionStoreIntegration:
         with patch("backend.ai_orchestrator.query") as mock_query:
             mock_query.side_effect = ClaudeSDKError("rate limit exceeded")
             with pytest.raises(ClaudeSDKError, match="rate limit exceeded"):
-                await orchestrator.generate_drafts(
-                    draftcircle_session_id="test-session",
-                    agent_session_id="some-session",
-                    template=template,
-                    seed_content="Seed.",
+                await collect_events(
+                    orchestrator.generate_drafts(
+                        draftcircle_session_id="test-session",
+                        agent_session_id="some-session",
+                        template=template,
+                        seed_content="Seed.",
+                    )
                 )
         assert mock_query.call_count == 1
 
@@ -555,10 +721,49 @@ class TestSessionStoreIntegration:
         ):
             mock_query.side_effect = RuntimeError("API down")
             with pytest.raises(RuntimeError):
-                await orchestrator.generate_drafts(
+                await collect_events(
+                    orchestrator.generate_drafts(
+                        draftcircle_session_id="test-session",
+                        agent_session_id=None,
+                        template=template,
+                        seed_content="Seed.",
+                    )
+                )
+            mock_flush.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_session_store_persists_across_stale_retry(
+        self, orchestrator, data_repo
+    ):
+        template = Template.model_validate(SAMPLE_TEMPLATE)
+        call_count = 0
+
+        def query_side_effect(**kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                raise ClaudeSDKError(
+                    "No conversation found with session ID: stale"
+                )
+            return mock_agent_messages(
+                tool_calls=[
+                    (
+                        "write_section_draft",
+                        {"section_id": "overview", "content": "draft"},
+                    ),
+                ],
+            )
+
+        with patch("backend.ai_orchestrator.query") as mock_query:
+            mock_query.side_effect = query_side_effect
+            await collect_events(
+                orchestrator.generate_drafts(
                     draftcircle_session_id="test-session",
-                    agent_session_id=None,
+                    agent_session_id="stale",
                     template=template,
                     seed_content="Seed.",
                 )
-            mock_flush.assert_called_once()
+            )
+            first_opts = mock_query.call_args_list[0].kwargs["options"]
+            retry_opts = mock_query.call_args_list[1].kwargs["options"]
+            assert type(first_opts.session_store) is type(retry_opts.session_store)

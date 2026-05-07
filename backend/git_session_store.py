@@ -41,6 +41,36 @@ class GitSessionStore:
                 entries.append(json.loads(line))
         return entries or None
 
+    async def delete(self, key: SessionKey) -> None:
+        subpath = key.get("subpath")
+        if subpath:
+            path = self._entry_path(key)
+            if self._git.file_exists(path):
+                self._git.delete_files(
+                    f"agent: delete transcript {subpath}",
+                    [path],
+                )
+            return
+
+        agent_dir = self._agent_dir()
+        all_files: list[str] = []
+        for name in self._git.list_directory(agent_dir):
+            child = f"{agent_dir}/{name}"
+            child_contents = self._git.list_directory(child)
+            if child_contents:
+                for sub_name in child_contents:
+                    sub_path = f"{child}/{sub_name}"
+                    if self._git.file_exists(sub_path):
+                        all_files.append(sub_path)
+            else:
+                if self._git.file_exists(child):
+                    all_files.append(child)
+        if all_files:
+            self._git.delete_files(
+                f"agent: delete all transcripts for {self._dc_session_id}",
+                all_files,
+            )
+
     def flush(self) -> str | None:
         if not self._pending:
             return None

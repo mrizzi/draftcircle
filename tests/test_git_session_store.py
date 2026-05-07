@@ -131,3 +131,51 @@ class TestPathMapping:
         await store.append(key, make_entries("e"))
         store.flush()
         assert git.file_exists("sessions/my-session/agent/subagents/agent-42.jsonl")
+
+
+class TestDelete:
+    @pytest.mark.asyncio
+    async def test_delete_main_transcript(self, data_repo):
+        git = GitStore(data_repo)
+        store = GitSessionStore(git, "test-session")
+        key = make_key()
+        await store.append(key, make_entries("hello"))
+        store.flush()
+
+        await store.delete(key)
+        assert await store.load(key) is None
+
+    @pytest.mark.asyncio
+    async def test_delete_cascades_to_subagents(self, data_repo):
+        git = GitStore(data_repo)
+        store = GitSessionStore(git, "test-session")
+        main_key = make_key()
+        sub_key = make_key(subpath="subagents/agent-42")
+        await store.append(main_key, make_entries("main"))
+        await store.append(sub_key, make_entries("sub"))
+        store.flush()
+
+        await store.delete(main_key)
+        assert await store.load(main_key) is None
+        assert await store.load(sub_key) is None
+
+    @pytest.mark.asyncio
+    async def test_delete_specific_subpath(self, data_repo):
+        git = GitStore(data_repo)
+        store = GitSessionStore(git, "test-session")
+        main_key = make_key()
+        sub_key = make_key(subpath="subagents/agent-42")
+        await store.append(main_key, make_entries("main"))
+        await store.append(sub_key, make_entries("sub"))
+        store.flush()
+
+        await store.delete(sub_key)
+        loaded_main = await store.load(main_key)
+        assert loaded_main is not None
+        assert await store.load(sub_key) is None
+
+    @pytest.mark.asyncio
+    async def test_delete_missing_is_noop(self, data_repo):
+        git = GitStore(data_repo)
+        store = GitSessionStore(git, "test-session")
+        await store.delete(make_key())

@@ -138,6 +138,40 @@ class TestPathMapping:
         )
 
 
+class TestPathValidation:
+    @pytest.mark.asyncio
+    async def test_rejects_traversal_in_project_key(self, data_repo):
+        git = GitStore(data_repo)
+        store = GitSessionStore(git, "test-session")
+        key = make_key(project_key="../../etc")
+        with pytest.raises(ValueError, match="unsafe path segment"):
+            await store.append(key, make_entries("e"))
+
+    @pytest.mark.asyncio
+    async def test_rejects_traversal_in_session_id(self, data_repo):
+        git = GitStore(data_repo)
+        store = GitSessionStore(git, "test-session")
+        key = make_key(session_id="../../../passwd")
+        with pytest.raises(ValueError, match="unsafe path segment"):
+            await store.append(key, make_entries("e"))
+
+    @pytest.mark.asyncio
+    async def test_rejects_traversal_in_subpath(self, data_repo):
+        git = GitStore(data_repo)
+        store = GitSessionStore(git, "test-session")
+        key = make_key(subpath="../../escape")
+        with pytest.raises(ValueError, match="unsafe path segment"):
+            await store.append(key, make_entries("e"))
+
+    @pytest.mark.asyncio
+    async def test_rejects_absolute_path(self, data_repo):
+        git = GitStore(data_repo)
+        store = GitSessionStore(git, "test-session")
+        key = make_key(project_key="/etc/passwd")
+        with pytest.raises(ValueError, match="unsafe path segment"):
+            await store.append(key, make_entries("e"))
+
+
 class TestDelete:
     @pytest.mark.asyncio
     async def test_delete_main_transcript(self, data_repo):

@@ -17,15 +17,23 @@ class GitSessionStore:
     def _agent_dir(self) -> str:
         return f"sessions/{self._dc_session_id}/agent"
 
+    @staticmethod
+    def _validate_key_segment(value: str, name: str) -> None:
+        if ".." in value or value.startswith("/"):
+            raise ValueError(f"SessionKey {name} contains unsafe path segment: {value}")
+
     def _entry_path(self, key: SessionKey) -> str:
         project_key = key["project_key"]
         session_id = key["session_id"]
-        base_dir = self._agent_dir()
+        self._validate_key_segment(project_key, "project_key")
+        self._validate_key_segment(session_id, "session_id")
 
+        base_dir = self._agent_dir()
         key_prefix = f"{project_key}/{session_id}"
 
         subpath = key.get("subpath")
         if subpath:
+            self._validate_key_segment(subpath, "subpath")
             return f"{base_dir}/{key_prefix}/{subpath}.jsonl"
         return f"{base_dir}/{key_prefix}/transcript.jsonl"
 

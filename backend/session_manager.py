@@ -374,7 +374,11 @@ class SessionManager:
             raise ValueError(f"Section '{section_id}' not found")
 
         status = session.section_meta[section_id].status
-        if status in (SectionStatus.APPROVED, SectionStatus.SKIPPED):
+        if status in (
+            SectionStatus.APPROVED,
+            SectionStatus.SKIPPED,
+            SectionStatus.DRAFTING,
+        ):
             raise ValueError(
                 f"Section '{section_id}' cannot be skipped from status '{status.value}'"
             )

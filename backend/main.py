@@ -211,7 +211,10 @@ def create_app(data_repo_path: str | None = None) -> FastAPI:
                         },
                     )
 
-            asyncio.create_task(draft_in_background())
+            task = asyncio.create_task(draft_in_background())
+            task.add_done_callback(
+                lambda t: t.exception() if not t.cancelled() else None
+            )
 
         result = sessions.get_session(session.id)
         return JSONResponse(result.model_dump(mode="json"), status_code=201)

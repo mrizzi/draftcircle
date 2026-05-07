@@ -82,6 +82,9 @@ function appendAiLog(text, className) {
   entry.className = 'ai-log-entry' + (className ? ' ' + className : '');
   entry.textContent = text;
   entries.appendChild(entry);
+  while (entries.children.length > 500) {
+    entries.firstChild.remove();
+  }
 
   const body = document.getElementById('ai-log-body');
   if (body) {

@@ -127,7 +127,22 @@ class AIOrchestrator:
     def __init__(self, git: GitStore, model: str = "claude-sonnet-4-6"):
         self._model = model
         self._git = git
+        self._config_dir = str(git.repo_path / ".claude-sdk")
         self._section_locks: dict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
+
+    @staticmethod
+    async def _collect_messages(
+        prompt: str, opts: ClaudeAgentOptions
+    ) -> tuple[list, str | None]:
+        content_blocks: list = []
+        session_id: str | None = None
+        async for message in query(prompt=prompt, options=opts):
+            if isinstance(message, AssistantMessage):
+                for block in message.content:
+                    content_blocks.append(block)
+            elif isinstance(message, ResultMessage):
+                session_id = message.session_id
+        return content_blocks, session_id
 
     async def _run_query(
         self,
@@ -138,7 +153,6 @@ class AIOrchestrator:
         allowed_tools: list[str] | None = None,
     ) -> tuple[list, str | None]:
         store = GitSessionStore(self._git, draftcircle_session_id)
-        config_dir = str(self._git.repo_path / ".claude-sdk")
 
         opts_kwargs: dict = {
             "system_prompt": system_prompt,
@@ -148,7 +162,7 @@ class AIOrchestrator:
             "tools": [],
             "mcp_servers": {"draftcircle": DRAFT_SERVER},
             "session_store": store,
-            "env": {"CLAUDE_CONFIG_DIR": config_dir},
+            "env": {"CLAUDE_CONFIG_DIR": self._config_dir},
         }
         if allowed_tools is not None:
             opts_kwargs["allowed_tools"] = allowed_tools
@@ -157,16 +171,8 @@ class AIOrchestrator:
 
         opts = ClaudeAgentOptions(**opts_kwargs)
 
-        content_blocks: list = []
-        session_id: str | None = None
-
         try:
-            async for message in query(prompt=prompt, options=opts):
-                if isinstance(message, AssistantMessage):
-                    for block in message.content:
-                        content_blocks.append(block)
-                elif isinstance(message, ResultMessage):
-                    session_id = message.session_id
+            content_blocks, session_id = await self._collect_messages(prompt, opts)
         except ClaudeSDKError as exc:
             if agent_session_id is not None and "session" in str(exc).lower():
                 logger.warning(
@@ -176,12 +182,7 @@ class AIOrchestrator:
                 )
                 opts_kwargs.pop("resume", None)
                 opts = ClaudeAgentOptions(**opts_kwargs)
-                async for message in query(prompt=prompt, options=opts):
-                    if isinstance(message, AssistantMessage):
-                        for block in message.content:
-                            content_blocks.append(block)
-                    elif isinstance(message, ResultMessage):
-                        session_id = message.session_id
+                content_blocks, session_id = await self._collect_messages(prompt, opts)
             else:
                 raise
         finally:

@@ -20,7 +20,56 @@ def client_ai(app_with_ai):
 
 
 class TestSessionCreationWithAI:
-    def test_generates_drafts_on_creation(self, client_ai):
+    def test_returns_json_immediately_with_seed(self, client_ai):
+        with patch("backend.ai_orchestrator.query") as mock_query:
+            mock_query.return_value = mock_agent_messages(
+                tool_calls=[
+                    (
+                        "write_section_draft",
+                        {"section_id": "overview", "content": "AI overview."},
+                    ),
+                    (
+                        "write_section_draft",
+                        {"section_id": "details", "content": "AI details."},
+                    ),
+                    (
+                        "write_section_draft",
+                        {"section_id": "notes", "content": "AI notes."},
+                    ),
+                ],
+                session_id="agent-123",
+            )
+            resp = client_ai.post(
+                "/api/sessions",
+                json={
+                    "template": "test-template",
+                    "coordinator": "alice",
+                    "participants": [],
+                    "seed_text": "Feature X allows users to do Y.",
+                },
+            )
+        assert resp.status_code == 201
+        assert "application/json" in resp.headers["content-type"]
+        session = resp.json()
+        assert "id" in session
+
+    def test_no_ai_without_seed(self, client_ai):
+        with patch("backend.ai_orchestrator.query") as mock_query:
+            resp = client_ai.post(
+                "/api/sessions",
+                json={
+                    "template": "test-template",
+                    "coordinator": "alice",
+                    "participants": [],
+                },
+            )
+        assert resp.status_code == 201
+        assert "application/json" in resp.headers["content-type"]
+        mock_query.assert_not_called()
+
+    def test_drafts_generated_in_background(self, client_ai):
+        import time
+
         with patch("backend.ai_orchestrator.query") as mock_query:
             mock_query.return_value = mock_agent_messages(
                 tool_calls=[
@@ -48,71 +97,13 @@ class TestSessionCreationWithAI:
                     "seed_text": "Feature X allows users to do Y.",
                 },
             )
-        assert resp.status_code == 201
-        session = parse_create_session_response(resp)
-        session_id = session["id"]
+            session_id = resp.json()["id"]
+            time.sleep(0.2)
 
-        section_resp = client_ai.get(f"/api/sessions/{session_id}/sections/overview")
-        assert section_resp.json()["content"] == "AI-generated overview."
-
-    def test_streams_progress_during_draft_generation(self, client_ai):
-        with patch("backend.ai_orchestrator.query") as mock_query:
-            mock_query.return_value = mock_agent_messages(
-                tool_calls=[
-                    ("write_section_draft", {"section_id": "overview", "content": "O"}),
-                    ("write_section_draft", {"section_id": "details", "content": "D"}),
-                ],
-                session_id="s1",
-            )
-            resp = client_ai.post(
-                "/api/sessions",
-                json={
-                    "template": "test-template",
-                    "coordinator": "alice",
-                    "participants": [],
-                    "seed_text": "Seed.",
-                },
-            )
-        assert resp.status_code == 201
-        assert "application/x-ndjson" in resp.headers["content-type"]
-
-        lines = [
-            json.loads(line) for line in resp.text.strip().split("\n") if line.strip()
-        ]
-        progress_msgs = [msg for msg in lines if msg["type"] == "progress"]
-        done_msgs = [msg for msg in lines if msg["type"] == "done"]
-
-        assert len(progress_msgs) >= 1
-        assert any("Generating drafts" in m["message"] for m in progress_msgs)
-        assert any("overview" in m["message"] for m in progress_msgs)
-        assert len(done_msgs) == 1
-        assert "id" in done_msgs[0]["session"]
-
-    def test_no_streaming_without_seed(self, client_ai):
-        resp = client_ai.post(
-            "/api/sessions",
-            json={
-                "template": "test-template",
-                "coordinator": "alice",
-                "participants": [],
-            },
+        section_resp = client_ai.get(
+            f"/api/sessions/{session_id}/sections/overview"
         )
-        assert resp.status_code == 201
-        assert "application/json" in resp.headers["content-type"]
-        assert "id" in resp.json()
-
-    def test_works_without_seed(self, client_ai):
-        with patch("backend.ai_orchestrator.query") as mock_query:
-            resp = client_ai.post(
-                "/api/sessions",
-                json={
-                    "template": "test-template",
-                    "coordinator": "alice",
-                    "participants": [],
-                },
-            )
-        assert resp.status_code == 201
-        mock_query.assert_not_called()
+        assert section_resp.json()["content"] == "AI-generated overview."
 
 
 class TestCommentWithAI:
@@ -128,7 +119,9 @@ class TestCommentWithAI:
                 "seed_text": "Feature X.",
             },
         )
-        return parse_create_session_response(resp)["id"]
+        import time
+        time.sleep(0.2)
+        return resp.json()["id"]
 
     def test_comment_triggers_proposal(self, client_ai):
         with patch("backend.ai_orchestrator.query") as mock_query:
@@ -258,6 +251,8 @@ class TestCommentWithAI:
 
 class TestAIGracefulDegradation:
     def test_session_created_despite_ai_failure(self, client_ai):
+        import time
+
         with patch("backend.ai_orchestrator.query") as mock_query:
             mock_query.side_effect = RuntimeError("API timeout")
             resp = client_ai.post(
@@ -270,12 +265,21 @@ class TestAIGracefulDegradation:
                 },
             )
         assert resp.status_code == 201
-        session = parse_create_session_response(resp)
+        session = resp.json()
         session_id = session["id"]
+        time.sleep(0.2)
+
         section_resp = client_ai.get(f"/api/sessions/{session_id}/sections/overview")
         assert section_resp.json()["content"] == ""
 
+        session_resp = client_ai.get(f"/api/sessions/{session_id}")
+        session_data = session_resp.json()
+        for meta in session_data["section_meta"].values():
+            assert meta["status"] == "draft"
+
     def test_comment_persisted_despite_ai_failure(self, client_ai):
+        import time
+
         with patch("backend.ai_orchestrator.query") as mock_query:
             mock_query.side_effect = [
                 mock_agent_messages(
@@ -313,7 +317,8 @@ class TestAIGracefulDegradation:
                     "seed_text": "Feature X.",
                 },
             )
-            session_id = parse_create_session_response(resp)["id"]
+            session_id = resp.json()["id"]
+            time.sleep(0.2)
 
             resp = client_ai.post(
                 f"/api/sessions/{session_id}/comments",

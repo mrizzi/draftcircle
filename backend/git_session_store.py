@@ -18,10 +18,17 @@ class GitSessionStore:
         return f"sessions/{self._dc_session_id}/agent"
 
     def _entry_path(self, key: SessionKey) -> str:
+        project_key = key["project_key"]
+        session_id = key["session_id"]
+        base_dir = self._agent_dir()
+
+        # Include project_key and session_id in path for isolation
+        key_prefix = f"{project_key}/{session_id}"
+
         subpath = key.get("subpath")
         if subpath:
-            return f"{self._agent_dir()}/{subpath}.jsonl"
-        return f"{self._agent_dir()}/transcript.jsonl"
+            return f"{base_dir}/{key_prefix}/{subpath}.jsonl"
+        return f"{base_dir}/{key_prefix}/transcript.jsonl"
 
     async def append(
         self, key: SessionKey, entries: list[SessionStoreEntry]
@@ -31,20 +38,29 @@ class GitSessionStore:
 
     async def load(self, key: SessionKey) -> list[SessionStoreEntry] | None:
         path = self._entry_path(key)
-        content = self._git.read_file(path)
-        if content is None:
-            return None
         entries: list[SessionStoreEntry] = []
-        for line in content.splitlines():
-            line = line.strip()
-            if line:
-                entries.append(json.loads(line))
+
+        # Load committed entries from git
+        content = self._git.read_file(path)
+        if content:
+            for line in content.splitlines():
+                line = line.strip()
+                if line:
+                    entries.append(json.loads(line))
+
+        # Append any pending unflushed entries
+        pending = self._pending.get(path, [])
+        entries.extend(pending)
+
         return entries or None
 
     async def delete(self, key: SessionKey) -> None:
         subpath = key.get("subpath")
         if subpath:
             path = self._entry_path(key)
+            # Clear pending entries for this specific subpath
+            self._pending.pop(path, None)
+            # Delete committed file if it exists
             if self._git.file_exists(path):
                 self._git.delete_files(
                     f"agent: delete transcript {subpath}",
@@ -52,10 +68,22 @@ class GitSessionStore:
                 )
             return
 
+        # Deleting main transcript - need to cascade to all subpaths
+        project_key = key["project_key"]
+        session_id = key["session_id"]
+        key_prefix = f"{project_key}/{session_id}"
         agent_dir = self._agent_dir()
+        prefix_dir = f"{agent_dir}/{key_prefix}"
+
+        # Clear all pending entries that match this key prefix
+        paths_to_remove = [p for p in self._pending if p.startswith(prefix_dir + "/")]
+        for p in paths_to_remove:
+            del self._pending[p]
+
+        # Delete all committed files under this key prefix
         all_files: list[str] = []
-        for name in self._git.list_directory(agent_dir):
-            child = f"{agent_dir}/{name}"
+        for name in self._git.list_directory(prefix_dir):
+            child = f"{prefix_dir}/{name}"
             child_contents = self._git.list_directory(child)
             if child_contents:
                 for sub_name in child_contents:
@@ -67,7 +95,7 @@ class GitSessionStore:
                     all_files.append(child)
         if all_files:
             self._git.delete_files(
-                f"agent: delete all transcripts for {self._dc_session_id}",
+                f"agent: delete all transcripts for {key_prefix}",
                 all_files,
             )
 

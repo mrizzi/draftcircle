@@ -121,7 +121,7 @@ class TestPathMapping:
         key = make_key()
         await store.append(key, make_entries("e"))
         store.flush()
-        assert git.file_exists("sessions/my-session/agent/transcript.jsonl")
+        assert git.file_exists("sessions/my-session/agent/proj/sess-001/transcript.jsonl")
 
     @pytest.mark.asyncio
     async def test_subagent_path(self, data_repo):
@@ -130,7 +130,9 @@ class TestPathMapping:
         key = make_key(subpath="subagents/agent-42")
         await store.append(key, make_entries("e"))
         store.flush()
-        assert git.file_exists("sessions/my-session/agent/subagents/agent-42.jsonl")
+        assert git.file_exists(
+            "sessions/my-session/agent/proj/sess-001/subagents/agent-42.jsonl"
+        )
 
 
 class TestDelete:
@@ -179,3 +181,22 @@ class TestDelete:
         git = GitStore(data_repo)
         store = GitSessionStore(git, "test-session")
         await store.delete(make_key())
+
+
+from claude_agent_sdk.testing import run_session_store_conformance
+
+
+class TestConformance:
+    @pytest.mark.asyncio
+    async def test_sdk_conformance(self, data_repo):
+        git = GitStore(data_repo)
+
+        def make_store():
+            return GitSessionStore(git, "conformance-session")
+
+        await run_session_store_conformance(
+            make_store,
+            skip_optional=frozenset(
+                {"list_sessions", "list_subkeys", "list_session_summaries"}
+            ),
+        )

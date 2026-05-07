@@ -66,37 +66,40 @@
           <button id="invite-links-btn" class="btn-link">Invite links</button>
         </div>
       </div>
-      <div id="review-area">
-        <div id="review-header">
-          <h3 id="review-title"></h3>
-          <div id="review-actions">
-            <button id="review-approve-btn" class="btn btn-success" style="display:none">Approve</button>
-            <button id="review-skip-btn" class="btn btn-secondary" style="display:none">Skip</button>
-            <button id="review-reopen-btn" class="btn btn-secondary" style="display:none">Reopen</button>
+      <div id="review-wrapper">
+        <div id="review-area">
+          <div id="review-header">
+            <h3 id="review-title"></h3>
+            <div id="review-actions">
+              <button id="review-approve-btn" class="btn btn-success" style="display:none">Approve</button>
+              <button id="review-skip-btn" class="btn btn-secondary" style="display:none">Skip</button>
+              <button id="review-reopen-btn" class="btn btn-secondary" style="display:none">Reopen</button>
+            </div>
+          </div>
+          <div id="review-status"></div>
+          <div id="review-draft" class="review-section"></div>
+          <div id="review-proposals" class="review-section"></div>
+          <div id="review-comments" class="review-section">
+            <h4>Comments</h4>
+            <div id="comments-thread"></div>
+            <div class="comment-input-row">
+              <textarea id="comment-input" rows="2" placeholder="Add a comment..."></textarea>
+              <button id="submit-comment-btn" class="btn btn-primary">Send</button>
+            </div>
+          </div>
+          <div id="review-empty" style="display:flex;align-items:center;justify-content:center;min-height:300px;color:var(--text-secondary);">
+            Select a section from the sidebar
           </div>
         </div>
-        <div id="review-status"></div>
-        <div id="review-draft" class="review-section"></div>
-        <div id="review-proposals" class="review-section"></div>
-        <div id="review-comments" class="review-section">
-          <h4>Comments</h4>
-          <div id="comments-thread"></div>
-          <div class="comment-input-row">
-            <textarea id="comment-input" rows="2" placeholder="Add a comment..."></textarea>
-            <button id="submit-comment-btn" class="btn btn-primary">Send</button>
+        <div id="ai-log-panel" class="ai-log-collapsed">
+          <div id="ai-log-toggle" class="ai-log-toggle">
+            <span>AI Activity</span>
+            <span id="ai-log-dot" class="ai-log-dot" style="display:none"></span>
+            <button id="ai-log-close" class="ai-log-close" title="Close">&times;</button>
           </div>
-        </div>
-        <div id="review-empty" style="display:flex;align-items:center;justify-content:center;min-height:300px;color:var(--text-secondary);">
-          Select a section from the sidebar
-        </div>
-      </div>
-      <div id="ai-log-panel" class="ai-log-collapsed" style="display:none">
-        <div id="ai-log-toggle" class="ai-log-toggle">
-          <span>AI Activity</span>
-          <span id="ai-log-dot" class="ai-log-dot" style="display:none"></span>
-        </div>
-        <div id="ai-log-body" class="ai-log-body">
-          <div id="ai-log-entries"></div>
+          <div id="ai-log-body" class="ai-log-body">
+            <div id="ai-log-entries"></div>
+          </div>
         </div>
       </div>
     </div>

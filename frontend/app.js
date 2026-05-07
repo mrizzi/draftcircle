@@ -113,12 +113,6 @@ function appendAiLog(text, className) {
   _aiLogScroll();
 }
 
-function showAiLogPanel() {
-  const panel = document.getElementById('ai-log-panel');
-  if (!panel) return;
-  panel.style.display = '';
-}
-
 function toggleAiLog() {
   const panel = document.getElementById('ai-log-panel');
   if (!panel) return;
@@ -128,6 +122,7 @@ function toggleAiLog() {
     state.aiLogHasNew = false;
     document.getElementById('ai-log-dot').style.display = 'none';
   }
+
 }
 
 function clearAiLog() {
@@ -138,12 +133,10 @@ function clearAiLog() {
   state.aiLogHasNew = false;
   state.aiLogOpen = false;
   const panel = document.getElementById('ai-log-panel');
-  if (panel) {
-    panel.classList.add('ai-log-collapsed');
-    panel.style.display = 'none';
-  }
+  if (panel) panel.classList.add('ai-log-collapsed');
   const dot = document.getElementById('ai-log-dot');
   if (dot) dot.style.display = 'none';
+
 }
 
 // --- Session List ---
@@ -444,11 +437,11 @@ async function openSession(sessionId) {
   const hasDrafting = Object.values(state.currentSession.section_meta)
     .some(m => m.status === 'drafting');
   if (hasDrafting) {
-    showAiLogPanel();
     appendAiLog('AI drafting in progress...', '');
     state.aiLogAutoOpened = true;
     state.aiLogOpen = true;
     document.getElementById('ai-log-panel').classList.remove('ai-log-collapsed');
+  
   }
 
   const meta = state.currentSession.section_meta;
@@ -474,6 +467,7 @@ async function openSession(sessionId) {
   renderWorkspace();
   showView('workspace');
   updateHeader();
+
 }
 
 function updateHeader() {
@@ -531,7 +525,9 @@ function renderSidebar() {
     header.className = 'sidebar-item-header';
     const title = document.createElement('span');
     title.className = 'sidebar-item-title';
-    title.textContent = sectionDef ? sectionDef.title : sid;
+    const titleText = sectionDef ? sectionDef.title : sid;
+    title.textContent = titleText;
+    title.title = titleText;
     const badge = document.createElement('span');
     badge.className = 'badge badge-' + meta.status.replace('_', '-');
     badge.textContent = meta.status;
@@ -936,6 +932,7 @@ async function submitComment() {
   const text = input.value.trim();
   if (!text || !state.activeSection || !state.userId) return;
 
+  input.value = '';
   try {
     await apiFetch('/sessions/' + state.currentSession.id + '/comments', {
       method: 'POST',
@@ -945,8 +942,8 @@ async function submitComment() {
         text: text,
       }),
     });
-    input.value = '';
   } catch (err) {
+    input.value = text;
     alert('Error: ' + err.message);
   }
 }
@@ -1190,11 +1187,11 @@ async function handleWsMessage(msg) {
   const sectionId = msg.section_id;
 
   if (msg.type === 'ai_activity') {
-    showAiLogPanel();
     if (!state.aiLogAutoOpened) {
       state.aiLogAutoOpened = true;
       state.aiLogOpen = true;
       document.getElementById('ai-log-panel').classList.remove('ai-log-collapsed');
+    
     }
     if (!state.aiLogOpen) {
       state.aiLogHasNew = true;
@@ -1208,7 +1205,6 @@ async function handleWsMessage(msg) {
   } else if (msg.type === 'ai_complete') {
     appendAiLog('AI processing complete.', 'complete');
   } else if (msg.type === 'drafts_started') {
-    showAiLogPanel();
     appendAiLog('Generating drafts...', '');
     state.currentSession = await apiFetch(sessionPath(sid));
     renderSidebar();
@@ -1328,6 +1324,10 @@ async function init() {
     reader.readAsText(file);
   });
   document.getElementById('ai-log-toggle').addEventListener('click', toggleAiLog);
+  document.getElementById('ai-log-close').addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (state.aiLogOpen) toggleAiLog();
+  });
 
   if (route.view === 'workspace' && route.sessionId) {
     state.templates = await apiFetch('/templates');

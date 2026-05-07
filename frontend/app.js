@@ -496,7 +496,7 @@ function renderSidebar() {
     title.className = 'sidebar-item-title';
     title.textContent = sectionDef ? sectionDef.title : sid;
     const badge = document.createElement('span');
-    badge.className = 'badge badge-' + meta.status.replace(' ', '-');
+    badge.className = 'badge badge-' + meta.status.replace('_', '-');
     badge.textContent = meta.status;
     header.appendChild(title);
     header.appendChild(badge);
@@ -614,7 +614,7 @@ function renderReviewArea() {
   const statusDiv = document.getElementById('review-status');
   statusDiv.textContent = '';
   const badge = document.createElement('span');
-  badge.className = 'badge badge-' + meta.status.replace(' ', '-');
+  badge.className = 'badge badge-' + meta.status.replace('_', '-');
   badge.textContent = meta.status;
   statusDiv.appendChild(badge);
 

@@ -618,10 +618,11 @@ function renderReviewArea() {
   badge.textContent = meta.status;
   statusDiv.appendChild(badge);
 
+  const frozen = meta.status === 'approved' || meta.status === 'skipped' || meta.status === 'drafting';
   document.getElementById('review-approve-btn').style.display =
-    (isOwner && meta.status !== 'approved' && meta.status !== 'skipped') ? 'inline-block' : 'none';
+    (isOwner && !frozen) ? 'inline-block' : 'none';
   document.getElementById('review-skip-btn').style.display =
-    (isOwner && sectionDef && sectionDef.priority !== 'required' && meta.status !== 'skipped' && meta.status !== 'approved') ? 'inline-block' : 'none';
+    (isOwner && sectionDef && sectionDef.priority !== 'required' && !frozen) ? 'inline-block' : 'none';
   document.getElementById('review-reopen-btn').style.display =
     (isOwner && meta.status === 'approved') ? 'inline-block' : 'none';
 
@@ -687,7 +688,7 @@ function renderReviewArea() {
 
   const commentInput = document.getElementById('comment-input');
   const commentBtn = document.getElementById('submit-comment-btn');
-  const commentDisabled = meta.status === 'approved';
+  const commentDisabled = meta.status === 'approved' || meta.status === 'drafting';
   commentInput.disabled = commentDisabled;
   commentBtn.disabled = commentDisabled;
 }

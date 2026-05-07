@@ -696,6 +696,16 @@ class TestSectionStatusTransitions:
         session = manager.get_session(session.id)
         assert session.section_meta["overview"].status == SectionStatus.IN_REVIEW
 
+    def test_comment_blocked_while_drafting(self, manager):
+        session = manager.create_session(
+            template_slug="test-template",
+            coordinator="alice",
+            participants=[],
+        )
+        manager.begin_drafting(session.id)
+        with pytest.raises(ValueError, match="Cannot comment"):
+            manager.add_comment(session.id, "overview", "alice", "test")
+
     def test_skip_blocked_while_drafting(self, manager):
         session = manager.create_session(
             template_slug="test-template",

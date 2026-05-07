@@ -206,9 +206,10 @@ class SessionManager:
         meta = session.section_meta.get(section_id)
         if meta is None:
             raise ValueError(f"Section '{section_id}' not found")
-        if meta.status == SectionStatus.APPROVED:
+        if meta.status in (SectionStatus.APPROVED, SectionStatus.DRAFTING):
             raise ValueError(
-                f"Section '{section_id}' is approved — reopen before commenting"
+                f"Cannot comment on section '{section_id}' while status is"
+                f" '{meta.status.value}'"
             )
 
         existing = self._load_comments(session, section_id)

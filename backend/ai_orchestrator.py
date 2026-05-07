@@ -92,18 +92,6 @@ DRAFT_SERVER = create_sdk_mcp_server(
 
 
 @dataclass(frozen=True)
-class DraftResult:
-    section_id: str
-    content: str
-
-    def __post_init__(self):
-        if not self.section_id:
-            raise ValueError("section_id must be non-empty")
-        if not self.content:
-            raise ValueError("content must be non-empty")
-
-
-@dataclass(frozen=True)
 class ProposalResult:
     revised_text: str
     summary: str

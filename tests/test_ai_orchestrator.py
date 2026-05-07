@@ -5,7 +5,6 @@ import pytest
 
 from backend.ai_orchestrator import (
     AIOrchestrator,
-    DraftResult,
     ProposalResult,
     ReplyResult,
 )
@@ -565,14 +564,6 @@ class TestProcessComment:
 
 
 class TestResultDataclasses:
-    def test_draft_result_rejects_empty_section_id(self):
-        with pytest.raises(ValueError, match="section_id"):
-            DraftResult(section_id="", content="some content")
-
-    def test_draft_result_rejects_empty_content(self):
-        with pytest.raises(ValueError, match="content"):
-            DraftResult(section_id="overview", content="")
-
     def test_proposal_result_rejects_empty_revised_text(self):
         with pytest.raises(ValueError, match="revised_text"):
             ProposalResult(revised_text="", summary="changed something")

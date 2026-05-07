@@ -57,7 +57,7 @@ class TestCreateSessionForm:
             "view active", timeout=WORKSPACE_TIMEOUT
         )
 
-    def test_button_shows_progress_during_draft_generation(self, page, base_url):
+    def test_session_creation_with_seed_generates_drafts(self, page, base_url):
         """
         Test that session creation completes.
         Draft generation now happens asynchronously via background task,

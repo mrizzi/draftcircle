@@ -439,14 +439,26 @@ class TestProcessComment:
             await asyncio.gather(
                 collect_events(
                     orchestrator.process_comment(
-                        "test-session", "overview", "Overview", "g",
-                        "Draft.", [], "alice", "comment 1",
+                        "test-session",
+                        "overview",
+                        "Overview",
+                        "g",
+                        "Draft.",
+                        [],
+                        "alice",
+                        "comment 1",
                     )
                 ),
                 collect_events(
                     orchestrator.process_comment(
-                        "test-session", "overview", "Overview", "g",
-                        "Draft.", [], "bob", "comment 2",
+                        "test-session",
+                        "overview",
+                        "Overview",
+                        "g",
+                        "Draft.",
+                        [],
+                        "bob",
+                        "comment 2",
                     )
                 ),
             )
@@ -651,9 +663,7 @@ class TestSessionStoreIntegration:
             mock_flush.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_stale_session_retries_without_resume(
-        self, orchestrator, data_repo
-    ):
+    async def test_stale_session_retries_without_resume(self, orchestrator, data_repo):
         template = Template.model_validate(SAMPLE_TEMPLATE)
         call_count = 0
 
@@ -742,9 +752,7 @@ class TestSessionStoreIntegration:
             nonlocal call_count
             call_count += 1
             if call_count == 1:
-                raise ClaudeSDKError(
-                    "No conversation found with session ID: stale"
-                )
+                raise ClaudeSDKError("No conversation found with session ID: stale")
             return mock_agent_messages(
                 tool_calls=[
                     (

@@ -669,9 +669,7 @@ class TestSectionStatusTransitions:
             participants=[],
         )
         manager.begin_drafting(session.id)
-        manager.set_section_status(
-            session.id, "overview", SectionStatus.DRAFT
-        )
+        manager.set_section_status(session.id, "overview", SectionStatus.DRAFT)
         manager.recover_drafting(session.id)
         session = manager.get_session(session.id)
         for meta in session.section_meta.values():
@@ -694,9 +692,7 @@ class TestSectionStatusTransitions:
             coordinator="alice",
             participants=[],
         )
-        manager.set_section_status(
-            session.id, "overview", SectionStatus.IN_REVIEW
-        )
+        manager.set_section_status(session.id, "overview", SectionStatus.IN_REVIEW)
         session = manager.get_session(session.id)
         assert session.section_meta["overview"].status == SectionStatus.IN_REVIEW
 
@@ -707,6 +703,4 @@ class TestSectionStatusTransitions:
             participants=[],
         )
         with pytest.raises(ValueError, match="not found"):
-            manager.set_section_status(
-                session.id, "nonexistent", SectionStatus.DRAFT
-            )
+            manager.set_section_status(session.id, "nonexistent", SectionStatus.DRAFT)

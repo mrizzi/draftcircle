@@ -315,9 +315,7 @@ class AIOrchestrator:
                     result = ReplyResult(text=block.input["text"])
                     break
 
-            result_type = (
-                "proposal" if isinstance(result, ProposalResult) else "reply"
-            )
+            result_type = "proposal" if isinstance(result, ProposalResult) else "reply"
             yield {
                 "type": "ai_complete",
                 "section_id": section_id,

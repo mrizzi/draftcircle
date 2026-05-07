@@ -1,11 +1,9 @@
-import json
 from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
 
 from backend.main import create_app
-from tests.conftest import parse_create_session_response
 from tests.test_ai_orchestrator import mock_agent_messages
 
 
@@ -100,9 +98,7 @@ class TestSessionCreationWithAI:
             session_id = resp.json()["id"]
             time.sleep(0.2)
 
-        section_resp = client_ai.get(
-            f"/api/sessions/{session_id}/sections/overview"
-        )
+        section_resp = client_ai.get(f"/api/sessions/{session_id}/sections/overview")
         assert section_resp.json()["content"] == "AI-generated overview."
 
 
@@ -120,6 +116,7 @@ class TestCommentWithAI:
             },
         )
         import time
+
         time.sleep(0.2)
         return resp.json()["id"]
 

@@ -73,14 +73,18 @@ class TestCreateSessionForm:
         page.click("#create-session-form button[type='submit']")
 
         # Wait for the workspace view to load (after session creation)
-        expect(page.locator("#view-workspace")).to_have_class("view active", timeout=10000)
+        expect(page.locator("#view-workspace")).to_have_class(
+            "view active", timeout=10000
+        )
 
         # Verify the session was created with 3 sections
-        expect(page.locator('.sidebar-item')).to_have_count(3)
+        expect(page.locator(".sidebar-item")).to_have_count(3)
 
         # The session should be created successfully (sections start in "draft" status)
         # Drafting happens in background, so we just verify session creation worked
-        expect(page.locator('#section-list .badge-draft')).to_have_count(3, timeout=5000)
+        expect(page.locator("#section-list .badge-draft")).to_have_count(
+            3, timeout=5000
+        )
 
     def test_required_unassigned_auto_assigns_to_coordinator(self, page, base_url):
         page.goto(base_url)

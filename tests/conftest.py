@@ -67,15 +67,6 @@ SAMPLE_USERS = {
 
 
 def parse_create_session_response(resp):
-    content_type = resp.headers.get("content-type", "")
-    if "ndjson" in content_type:
-        for line in resp.text.strip().split("\n"):
-            if not line.strip():
-                continue
-            msg = json.loads(line)
-            if msg.get("type") == "done":
-                return msg["session"]
-        raise ValueError("No 'done' event in streaming response")
     return resp.json()
 
 

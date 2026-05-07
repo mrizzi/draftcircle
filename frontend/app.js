@@ -1170,7 +1170,7 @@ async function handleWsMessage(msg) {
     appendAiLog('Generating drafts...', '');
     state.currentSession = await apiFetch(sessionPath(sid));
     renderSidebar();
-  } else if (msg.type === 'section_drafted' && sectionId) {
+  } else if (msg.type === 'section_draft_ready' && sectionId) {
     appendAiLog('Drafted: ' + sectionId, '');
     state.currentSession = await apiFetch(sessionPath(sid));
     state.sectionContent[sectionId] = await apiFetch('/sessions/' + sid + '/sections/' + sectionId);

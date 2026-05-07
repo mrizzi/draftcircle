@@ -178,7 +178,7 @@ def create_app(data_repo_path: str | None = None) -> FastAPI:
                                 await ws_manager.broadcast(
                                     session.id,
                                     {
-                                        "type": "section_drafted",
+                                        "type": "section_draft_ready",
                                         "section_id": event["section_id"],
                                         "status": "draft",
                                     },

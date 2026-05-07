@@ -108,7 +108,10 @@ class TestLoad:
     @pytest.mark.asyncio
     async def test_returns_none_for_empty_file(self, data_repo):
         git = GitStore(data_repo)
-        git.commit("add empty", {"sessions/test-session/agent/transcript.jsonl": ""})
+        git.commit(
+            "add empty",
+            {"sessions/test-session/agent/proj/sess-001/transcript.jsonl": ""},
+        )
         store = GitSessionStore(git, "test-session")
         result = await store.load(make_key())
         assert result is None
@@ -139,6 +142,11 @@ class TestPathMapping:
 
 
 class TestPathValidation:
+    def test_rejects_traversal_in_draftcircle_session_id(self, data_repo):
+        git = GitStore(data_repo)
+        with pytest.raises(ValueError, match="unsafe path segment"):
+            GitSessionStore(git, "../../escape")
+
     @pytest.mark.asyncio
     async def test_rejects_traversal_in_project_key(self, data_repo):
         git = GitStore(data_repo)

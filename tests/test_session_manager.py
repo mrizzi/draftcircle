@@ -648,3 +648,65 @@ class TestCoordinatorAsParticipant:
         )
         alice_entries = [p for p in session.participants if p.user_id == "alice"]
         assert len(alice_entries) == 1
+
+
+class TestSectionStatusTransitions:
+    def test_begin_drafting_sets_all_to_drafting(self, manager):
+        session = manager.create_session(
+            template_slug="test-template",
+            coordinator="alice",
+            participants=[],
+        )
+        manager.begin_drafting(session.id)
+        session = manager.get_session(session.id)
+        for meta in session.section_meta.values():
+            assert meta.status == SectionStatus.DRAFTING
+
+    def test_recover_drafting_resets_to_draft(self, manager):
+        session = manager.create_session(
+            template_slug="test-template",
+            coordinator="alice",
+            participants=[],
+        )
+        manager.begin_drafting(session.id)
+        manager.set_section_status(
+            session.id, "overview", SectionStatus.DRAFT
+        )
+        manager.recover_drafting(session.id)
+        session = manager.get_session(session.id)
+        for meta in session.section_meta.values():
+            assert meta.status == SectionStatus.DRAFT
+
+    def test_recover_drafting_noop_when_no_drafting(self, manager):
+        session = manager.create_session(
+            template_slug="test-template",
+            coordinator="alice",
+            participants=[],
+        )
+        manager.recover_drafting(session.id)
+        session = manager.get_session(session.id)
+        for meta in session.section_meta.values():
+            assert meta.status == SectionStatus.DRAFT
+
+    def test_set_section_status(self, manager):
+        session = manager.create_session(
+            template_slug="test-template",
+            coordinator="alice",
+            participants=[],
+        )
+        manager.set_section_status(
+            session.id, "overview", SectionStatus.IN_REVIEW
+        )
+        session = manager.get_session(session.id)
+        assert session.section_meta["overview"].status == SectionStatus.IN_REVIEW
+
+    def test_set_section_status_unknown_section(self, manager):
+        session = manager.create_session(
+            template_slug="test-template",
+            coordinator="alice",
+            participants=[],
+        )
+        with pytest.raises(ValueError, match="not found"):
+            manager.set_section_status(
+                session.id, "nonexistent", SectionStatus.DRAFT
+            )

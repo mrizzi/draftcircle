@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from collections import defaultdict
 from dataclasses import dataclass
 from typing import Any
@@ -6,6 +7,7 @@ from typing import Any
 from claude_agent_sdk import (
     AssistantMessage,
     ClaudeAgentOptions,
+    ClaudeSDKError,
     ResultMessage,
     ToolUseBlock,
     create_sdk_mcp_server,
@@ -13,7 +15,11 @@ from claude_agent_sdk import (
     tool,
 )
 
+from backend.git_session_store import GitSessionStore
+from backend.git_store import GitStore
 from backend.models import Template
+
+logger = logging.getLogger(__name__)
 
 
 @tool(
@@ -118,17 +124,22 @@ class ReplyResult:
 
 
 class AIOrchestrator:
-    def __init__(self, model: str = "claude-sonnet-4-6"):
+    def __init__(self, git: GitStore, model: str = "claude-sonnet-4-6"):
         self._model = model
+        self._git = git
         self._section_locks: dict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
 
     async def _run_query(
         self,
         prompt: str,
         system_prompt: str,
+        draftcircle_session_id: str,
         agent_session_id: str | None = None,
         allowed_tools: list[str] | None = None,
     ) -> tuple[list, str | None]:
+        store = GitSessionStore(self._git, draftcircle_session_id)
+        config_dir = str(self._git.repo_path / ".claude-sdk")
+
         opts_kwargs: dict = {
             "system_prompt": system_prompt,
             "model": self._model,
@@ -136,6 +147,8 @@ class AIOrchestrator:
             "permission_mode": "bypassPermissions",
             "tools": [],
             "mcp_servers": {"draftcircle": DRAFT_SERVER},
+            "session_store": store,
+            "env": {"CLAUDE_CONFIG_DIR": config_dir},
         }
         if allowed_tools is not None:
             opts_kwargs["allowed_tools"] = allowed_tools
@@ -147,18 +160,39 @@ class AIOrchestrator:
         content_blocks: list = []
         session_id: str | None = None
 
-        async for message in query(prompt=prompt, options=opts):
-            if isinstance(message, AssistantMessage):
-                for block in message.content:
-                    content_blocks.append(block)
-            elif isinstance(message, ResultMessage):
-                session_id = message.session_id
+        try:
+            async for message in query(prompt=prompt, options=opts):
+                if isinstance(message, AssistantMessage):
+                    for block in message.content:
+                        content_blocks.append(block)
+                elif isinstance(message, ResultMessage):
+                    session_id = message.session_id
+        except ClaudeSDKError as exc:
+            if agent_session_id is not None and "session" in str(exc).lower():
+                logger.warning(
+                    "Stale agent session %s, starting fresh: %s",
+                    agent_session_id,
+                    exc,
+                )
+                opts_kwargs.pop("resume", None)
+                opts = ClaudeAgentOptions(**opts_kwargs)
+                async for message in query(prompt=prompt, options=opts):
+                    if isinstance(message, AssistantMessage):
+                        for block in message.content:
+                            content_blocks.append(block)
+                    elif isinstance(message, ResultMessage):
+                        session_id = message.session_id
+            else:
+                raise
+        finally:
+            store.flush()
 
         return content_blocks, session_id
 
     async def generate_drafts(
         self,
-        session_id: str | None,
+        draftcircle_session_id: str,
+        agent_session_id: str | None,
         template: Template,
         seed_content: str,
     ) -> tuple[list[DraftResult], str | None]:
@@ -177,10 +211,11 @@ class AIOrchestrator:
             f"{sections_text}"
         )
 
-        content_blocks, agent_session_id = await self._run_query(
+        content_blocks, result_session_id = await self._run_query(
             prompt=prompt,
             system_prompt=template.ai_context,
-            agent_session_id=session_id,
+            draftcircle_session_id=draftcircle_session_id,
+            agent_session_id=agent_session_id,
             allowed_tools=["mcp__draftcircle__write_section_draft"],
         )
 
@@ -195,7 +230,7 @@ class AIOrchestrator:
                         content=block.input["content"],
                     )
                 )
-        return drafts, agent_session_id
+        return drafts, result_session_id
 
     async def process_comment(
         self,
@@ -234,6 +269,7 @@ class AIOrchestrator:
             content_blocks, result_session_id = await self._run_query(
                 prompt=prompt,
                 system_prompt=system_prompt,
+                draftcircle_session_id=session_id or "unknown",
                 agent_session_id=agent_session_id,
                 allowed_tools=[
                     "mcp__draftcircle__propose_revision",

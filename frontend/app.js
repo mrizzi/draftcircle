@@ -432,6 +432,7 @@ async function openSession(sessionId) {
   if (window.location.pathname !== '/session/' + sessionId) {
     window.history.pushState({}, '', '/session/' + sessionId);
   }
+  state.token = localStorage.getItem('dc-token-' + sessionId) || null;
   state.currentSession = await apiFetch(sessionPath(sessionId));
   state.sectionContent = {};
   state.sectionComments = {};

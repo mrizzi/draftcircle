@@ -10,6 +10,7 @@ logger = logging.getLogger(__name__)
 
 class GitSessionStore:
     def __init__(self, git: GitStore, draftcircle_session_id: str):
+        self._validate_key_segment(draftcircle_session_id, "draftcircle_session_id")
         self._git = git
         self._dc_session_id = draftcircle_session_id
         self._pending: dict[str, list[SessionStoreEntry]] = {}

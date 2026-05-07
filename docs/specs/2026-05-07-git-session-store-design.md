@@ -105,9 +105,15 @@ per-call.
 ```
 sessions/<dc-session-id>/
   agent/
-    transcript.jsonl                        # main transcript
-    subagents/agent-<id>.jsonl              # subagent transcripts (if any)
+    <project_key>/<session_id>/
+      transcript.jsonl                      # main transcript
+      subagents/agent-<id>.jsonl            # subagent transcripts (if any)
 ```
+
+The `project_key` and `session_id` from the SessionKey are included in the
+path to satisfy the SDK conformance suite's isolation requirements. In
+practice, each DraftCircle session has one project_key/session_id
+combination, so there is one transcript hierarchy per store instance.
 
 Files use JSONL format (one JSON object per line), matching the SDK's
 native on-disk format.
@@ -115,11 +121,8 @@ native on-disk format.
 ### Path mapping
 
 `_entry_path(key: SessionKey) -> str`:
-- No subpath: `sessions/<dc-id>/agent/transcript.jsonl`
-- With subpath: `sessions/<dc-id>/agent/<subpath>.jsonl`
-
-The `project_key` and `session_id` from the SessionKey are not used in the
-file path because the store is already scoped to one DraftCircle session.
+- No subpath: `sessions/<dc-id>/agent/<project_key>/<session_id>/transcript.jsonl`
+- With subpath: `sessions/<dc-id>/agent/<project_key>/<session_id>/<subpath>.jsonl`
 
 ### append(key, entries)
 

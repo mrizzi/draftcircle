@@ -11,7 +11,13 @@ from backend.ai_orchestrator import (
 )
 from backend.git_store import GitStore
 from backend.models import Template
-from claude_agent_sdk import AssistantMessage, ResultMessage, TextBlock, ToolUseBlock
+from claude_agent_sdk import (
+    AssistantMessage,
+    ClaudeSDKError,
+    ResultMessage,
+    TextBlock,
+    ToolUseBlock,
+)
 from tests.conftest import SAMPLE_TEMPLATE
 
 
@@ -458,6 +464,43 @@ class TestSessionStoreIntegration:
                 seed_content="Seed.",
             )
             mock_flush.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_stale_session_retries_without_resume(self, orchestrator, data_repo):
+        template = Template.model_validate(SAMPLE_TEMPLATE)
+        call_count = 0
+
+        def query_side_effect(**kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                raise ClaudeSDKError(
+                    "No conversation found with session ID: old-session"
+                )
+            return mock_agent_messages(
+                tool_calls=[
+                    (
+                        "write_section_draft",
+                        {"section_id": "overview", "content": "draft"},
+                    ),
+                ],
+                session_id="new-session",
+            )
+
+        with patch("backend.ai_orchestrator.query") as mock_query:
+            mock_query.side_effect = query_side_effect
+            drafts, sid = await orchestrator.generate_drafts(
+                draftcircle_session_id="test-session",
+                agent_session_id="old-session",
+                template=template,
+                seed_content="Seed.",
+            )
+
+        assert sid == "new-session"
+        assert len(drafts) == 1
+        assert mock_query.call_count == 2
+        retry_opts = mock_query.call_args_list[1].kwargs["options"]
+        assert retry_opts.resume is None
 
     @pytest.mark.asyncio
     async def test_flush_called_on_error(self, orchestrator, data_repo):

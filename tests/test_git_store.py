@@ -143,3 +143,39 @@ class TestPathTraversal:
         store = GitStore(data_repo)
         with pytest.raises(ValueError, match="escapes repository"):
             store.list_directory("../../")
+
+
+class TestDeleteFiles:
+    def test_deletes_single_file(self, data_repo):
+        store = GitStore(data_repo)
+        store.commit("add", {"a.txt": "content"})
+        sha = store.delete_files("remove a", ["a.txt"])
+        assert len(sha) == 40
+        assert store.read_file("a.txt") is None
+        assert store.file_exists("a.txt") is False
+
+    def test_deletes_multiple_files(self, data_repo):
+        store = GitStore(data_repo)
+        store.commit("add", {"a.txt": "a", "b.txt": "b", "c.txt": "c"})
+        store.delete_files("remove a and b", ["a.txt", "b.txt"])
+        assert store.read_file("a.txt") is None
+        assert store.read_file("b.txt") is None
+        assert store.read_file("c.txt") == "c"
+
+    def test_deletes_nested_file(self, data_repo):
+        store = GitStore(data_repo)
+        store.commit("add", {"d/sub/file.txt": "content", "d/other.txt": "other"})
+        store.delete_files("remove nested", ["d/sub/file.txt"])
+        assert store.read_file("d/sub/file.txt") is None
+        assert store.read_file("d/other.txt") == "other"
+
+    def test_noop_for_missing_file(self, data_repo):
+        store = GitStore(data_repo)
+        store.commit("add", {"a.txt": "a"})
+        sha = store.delete_files("remove missing", ["nonexistent.txt"])
+        assert len(sha) == 40
+
+    def test_rejects_path_traversal(self, data_repo):
+        store = GitStore(data_repo)
+        with pytest.raises(ValueError, match="escapes repository"):
+            store.delete_files("bad", ["../../etc/passwd"])

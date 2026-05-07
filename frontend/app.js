@@ -74,23 +74,43 @@ function formatTime(iso) {
   });
 }
 
-function appendAiLog(text, className) {
-  const entries = document.getElementById('ai-log-entries');
-  if (!entries) return;
+let _aiLogCurrent = null;
 
-  const entry = document.createElement('div');
-  entry.className = 'ai-log-entry' + (className ? ' ' + className : '');
-  entry.textContent = text;
-  entries.appendChild(entry);
-  while (entries.children.length > 500) {
-    entries.firstChild.remove();
-  }
-
+function _aiLogScroll() {
   const body = document.getElementById('ai-log-body');
   if (body) {
-    const isScrolledToBottom = body.scrollHeight - body.scrollTop - body.clientHeight < 30;
-    if (isScrolledToBottom) body.scrollTop = body.scrollHeight;
+    const near = body.scrollHeight - body.scrollTop - body.clientHeight < 30;
+    if (near) body.scrollTop = body.scrollHeight;
   }
+}
+
+function _aiLogNewEntry(className) {
+  const entries = document.getElementById('ai-log-entries');
+  if (!entries) return null;
+  const el = document.createElement('div');
+  el.className = 'ai-log-entry' + (className ? ' ' + className : '');
+  entries.appendChild(el);
+  while (entries.children.length > 500) entries.firstChild.remove();
+  return el;
+}
+
+function appendAiLogStream(text) {
+  if (!document.getElementById('ai-log-entries')) return;
+  const lines = text.split('\n');
+  for (let i = 0; i < lines.length; i++) {
+    if (i > 0) _aiLogCurrent = null;
+    if (!lines[i]) continue;
+    if (!_aiLogCurrent) _aiLogCurrent = _aiLogNewEntry('');
+    _aiLogCurrent.textContent += lines[i];
+  }
+  _aiLogScroll();
+}
+
+function appendAiLog(text, className) {
+  _aiLogCurrent = null;
+  const el = _aiLogNewEntry(className);
+  if (el) el.textContent = text;
+  _aiLogScroll();
 }
 
 function showAiLogPanel() {
@@ -111,6 +131,7 @@ function toggleAiLog() {
 }
 
 function clearAiLog() {
+  _aiLogCurrent = null;
   const entries = document.getElementById('ai-log-entries');
   if (entries) entries.textContent = '';
   state.aiLogAutoOpened = false;
@@ -1168,7 +1189,11 @@ async function handleWsMessage(msg) {
       state.aiLogHasNew = true;
       document.getElementById('ai-log-dot').style.display = '';
     }
-    appendAiLog(msg.text, msg.error ? 'error' : '');
+    if (msg.error) {
+      appendAiLog(msg.text, 'error');
+    } else {
+      appendAiLogStream(msg.text);
+    }
   } else if (msg.type === 'ai_complete') {
     appendAiLog('AI processing complete.', 'complete');
   } else if (msg.type === 'drafts_started') {

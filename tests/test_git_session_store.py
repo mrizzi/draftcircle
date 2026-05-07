@@ -1,6 +1,5 @@
-import json
-
 import pytest
+from claude_agent_sdk.testing import run_session_store_conformance
 
 from backend.git_session_store import GitSessionStore
 from backend.git_store import GitStore
@@ -14,7 +13,9 @@ def make_key(project_key="proj", session_id="sess-001", subpath=None):
 
 
 def make_entries(*texts):
-    return [{"type": "test", "uuid": f"uuid-{i}", "text": t} for i, t in enumerate(texts)]
+    return [
+        {"type": "test", "uuid": f"uuid-{i}", "text": t} for i, t in enumerate(texts)
+    ]
 
 
 class TestAppendFlushLoad:
@@ -121,7 +122,9 @@ class TestPathMapping:
         key = make_key()
         await store.append(key, make_entries("e"))
         store.flush()
-        assert git.file_exists("sessions/my-session/agent/proj/sess-001/transcript.jsonl")
+        assert git.file_exists(
+            "sessions/my-session/agent/proj/sess-001/transcript.jsonl"
+        )
 
     @pytest.mark.asyncio
     async def test_subagent_path(self, data_repo):
@@ -181,9 +184,6 @@ class TestDelete:
         git = GitStore(data_repo)
         store = GitSessionStore(git, "test-session")
         await store.delete(make_key())
-
-
-from claude_agent_sdk.testing import run_session_store_conformance
 
 
 class TestConformance:

@@ -29,9 +29,7 @@ class GitSessionStore:
             return f"{base_dir}/{key_prefix}/{subpath}.jsonl"
         return f"{base_dir}/{key_prefix}/transcript.jsonl"
 
-    async def append(
-        self, key: SessionKey, entries: list[SessionStoreEntry]
-    ) -> None:
+    async def append(self, key: SessionKey, entries: list[SessionStoreEntry]) -> None:
         path = self._entry_path(key)
         self._pending.setdefault(path, []).extend(entries)
 

@@ -441,9 +441,7 @@ class TestSessionStoreIntegration:
 
         with (
             patch("backend.ai_orchestrator.query") as mock_query,
-            patch(
-                "backend.git_session_store.GitSessionStore.flush"
-            ) as mock_flush,
+            patch("backend.git_session_store.GitSessionStore.flush") as mock_flush,
         ):
             mock_query.return_value = mock_agent_messages(
                 tool_calls=[
@@ -467,9 +465,7 @@ class TestSessionStoreIntegration:
 
         with (
             patch("backend.ai_orchestrator.query") as mock_query,
-            patch(
-                "backend.git_session_store.GitSessionStore.flush"
-            ) as mock_flush,
+            patch("backend.git_session_store.GitSessionStore.flush") as mock_flush,
         ):
             mock_query.side_effect = RuntimeError("API down")
             with pytest.raises(RuntimeError):

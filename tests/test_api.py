@@ -183,7 +183,10 @@ class TestCommentEndpoints:
         )
         resp = client.get(f"/api/sessions/{sid}/sections/overview/comments")
         assert resp.status_code == 200
-        assert len(resp.json()) == 1
+        comments = resp.json()
+        assert len(comments) == 2
+        assert comments[0]["author"] == "alice"
+        assert comments[1]["author"] == "ai"
 
 
 class TestProposalEndpoints:

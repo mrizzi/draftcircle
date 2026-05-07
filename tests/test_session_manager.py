@@ -706,6 +706,51 @@ class TestSectionStatusTransitions:
         with pytest.raises(ValueError, match="Cannot transition"):
             manager.set_section_status(session.id, "overview", SectionStatus.APPROVED)
 
+    @pytest.mark.parametrize(
+        "from_status,setup,section_id,to_status",
+        [
+            ("draft", None, "overview", SectionStatus.APPROVED),
+            ("draft", None, "overview", SectionStatus.IN_REVIEW),
+            (
+                "in-review",
+                lambda m, s: m.add_comment(s.id, "overview", "alice", "x"),
+                "overview",
+                SectionStatus.DRAFT,
+            ),
+            (
+                "approved",
+                lambda m, s: m.approve_section(s.id, "overview", "alice"),
+                "overview",
+                SectionStatus.DRAFT,
+            ),
+            (
+                "skipped",
+                lambda m, s: m.skip_section(s.id, "details", "alice"),
+                "details",
+                SectionStatus.DRAFT,
+            ),
+        ],
+        ids=[
+            "draft-to-approved",
+            "draft-to-in_review",
+            "in_review-to-draft",
+            "approved-to-draft",
+            "skipped-to-draft",
+        ],
+    )
+    def test_set_section_status_rejects_all_invalid_transitions(
+        self, manager, from_status, setup, section_id, to_status
+    ):
+        session = manager.create_session(
+            template_slug="test-template",
+            coordinator="alice",
+            participants=[],
+        )
+        if setup:
+            setup(manager, session)
+        with pytest.raises(ValueError, match="Cannot transition"):
+            manager.set_section_status(session.id, section_id, to_status)
+
     def test_comment_blocked_while_drafting(self, manager):
         session = manager.create_session(
             template_slug="test-template",

@@ -9,9 +9,16 @@ from backend.ai_orchestrator import (
     ProposalResult,
     ReplyResult,
 )
+from backend.git_store import GitStore
 from backend.models import Template
 from claude_agent_sdk import AssistantMessage, ResultMessage, TextBlock, ToolUseBlock
 from tests.conftest import SAMPLE_TEMPLATE
+
+
+@pytest.fixture()
+def orchestrator(data_repo):
+    git = GitStore(data_repo)
+    return AIOrchestrator(git=git)
 
 
 def mock_agent_messages(tool_calls=None, text=None, session_id="test-session"):
@@ -52,8 +59,7 @@ def mock_agent_messages(tool_calls=None, text=None, session_id="test-session"):
 
 class TestGenerateDrafts:
     @pytest.mark.asyncio
-    async def test_generates_drafts(self):
-        orchestrator = AIOrchestrator()
+    async def test_generates_drafts(self, orchestrator):
         template = Template.model_validate(SAMPLE_TEMPLATE)
 
         with patch("backend.ai_orchestrator.query") as mock_query:
@@ -81,7 +87,8 @@ class TestGenerateDrafts:
                 session_id="sess-123",
             )
             drafts, sid = await orchestrator.generate_drafts(
-                session_id=None,
+                draftcircle_session_id="test-session",
+                agent_session_id=None,
                 template=template,
                 seed_content="Feature X enables users to do Y.",
             )
@@ -93,8 +100,7 @@ class TestGenerateDrafts:
         assert drafts[2].section_id == "notes"
 
     @pytest.mark.asyncio
-    async def test_returns_session_id(self):
-        orchestrator = AIOrchestrator()
+    async def test_returns_session_id(self, orchestrator):
         template = Template.model_validate(SAMPLE_TEMPLATE)
 
         with patch("backend.ai_orchestrator.query") as mock_query:
@@ -108,14 +114,16 @@ class TestGenerateDrafts:
                 session_id="sess-456",
             )
             _, sid = await orchestrator.generate_drafts(
-                session_id=None, template=template, seed_content="Seed."
+                draftcircle_session_id="test-session",
+                agent_session_id=None,
+                template=template,
+                seed_content="Seed.",
             )
 
         assert sid == "sess-456"
 
     @pytest.mark.asyncio
-    async def test_sends_seed_and_template_context(self):
-        orchestrator = AIOrchestrator()
+    async def test_sends_seed_and_template_context(self, orchestrator):
         template = Template.model_validate(SAMPLE_TEMPLATE)
 
         with patch("backend.ai_orchestrator.query") as mock_query:
@@ -128,7 +136,8 @@ class TestGenerateDrafts:
                 ],
             )
             await orchestrator.generate_drafts(
-                session_id=None,
+                draftcircle_session_id="test-session",
+                agent_session_id=None,
                 template=template,
                 seed_content="Seed material here",
             )
@@ -142,8 +151,7 @@ class TestGenerateDrafts:
             assert opts.system_prompt == template.ai_context
 
     @pytest.mark.asyncio
-    async def test_returns_empty_when_no_tools(self):
-        orchestrator = AIOrchestrator()
+    async def test_returns_empty_when_no_tools(self, orchestrator):
         template = Template.model_validate(SAMPLE_TEMPLATE)
 
         with patch("backend.ai_orchestrator.query") as mock_query:
@@ -151,7 +159,8 @@ class TestGenerateDrafts:
                 text="I can't generate drafts right now.",
             )
             drafts, sid = await orchestrator.generate_drafts(
-                session_id=None,
+                draftcircle_session_id="test-session",
+                agent_session_id=None,
                 template=template,
                 seed_content="Seed material",
             )
@@ -161,9 +170,7 @@ class TestGenerateDrafts:
 
 class TestProcessComment:
     @pytest.mark.asyncio
-    async def test_returns_proposal(self):
-        orchestrator = AIOrchestrator()
-
+    async def test_returns_proposal(self, orchestrator):
         with patch("backend.ai_orchestrator.query") as mock_query:
             mock_query.return_value = mock_agent_messages(
                 tool_calls=[
@@ -191,9 +198,7 @@ class TestProcessComment:
         assert "rate limiting" in result.revised_text
 
     @pytest.mark.asyncio
-    async def test_returns_reply(self):
-        orchestrator = AIOrchestrator()
-
+    async def test_returns_reply(self, orchestrator):
         with patch("backend.ai_orchestrator.query") as mock_query:
             mock_query.return_value = mock_agent_messages(
                 tool_calls=[
@@ -220,8 +225,7 @@ class TestProcessComment:
         assert "rate limiting" in result.text
 
     @pytest.mark.asyncio
-    async def test_includes_thread_in_prompt(self):
-        orchestrator = AIOrchestrator()
+    async def test_includes_thread_in_prompt(self, orchestrator):
         thread = [
             {"author": "alice", "text": "First comment"},
             {"author": "bob", "text": "I agree"},
@@ -248,9 +252,7 @@ class TestProcessComment:
             assert "New comment" in prompt
 
     @pytest.mark.asyncio
-    async def test_fallback_reply_no_tool(self):
-        orchestrator = AIOrchestrator()
-
+    async def test_fallback_reply_no_tool(self, orchestrator):
         with patch("backend.ai_orchestrator.query") as mock_query:
             mock_query.return_value = mock_agent_messages(
                 text="I'm not sure what to do here.",
@@ -270,9 +272,7 @@ class TestProcessComment:
         assert result.text == "I've noted your comment."
 
     @pytest.mark.asyncio
-    async def test_returns_session_id(self):
-        orchestrator = AIOrchestrator()
-
+    async def test_returns_session_id(self, orchestrator):
         with patch("backend.ai_orchestrator.query") as mock_query:
             mock_query.return_value = mock_agent_messages(
                 tool_calls=[("post_reply", {"text": "noted"})],
@@ -292,9 +292,7 @@ class TestProcessComment:
         assert sid == "sess-789"
 
     @pytest.mark.asyncio
-    async def test_passes_resume_id(self):
-        orchestrator = AIOrchestrator()
-
+    async def test_passes_resume_id(self, orchestrator):
         with patch("backend.ai_orchestrator.query") as mock_query:
             mock_query.return_value = mock_agent_messages(
                 tool_calls=[("post_reply", {"text": "noted"})],
@@ -316,8 +314,7 @@ class TestProcessComment:
             assert opts.resume == "existing-session-42"
 
     @pytest.mark.asyncio
-    async def test_section_lock(self):
-        orchestrator = AIOrchestrator()
+    async def test_section_lock(self, orchestrator):
         call_order = []
 
         def slow_query(**kwargs):
@@ -389,3 +386,97 @@ class TestResultDataclasses:
     def test_reply_result_rejects_empty_text(self):
         with pytest.raises(ValueError, match="text"):
             ReplyResult(text="")
+
+
+class TestSessionStoreIntegration:
+    @pytest.mark.asyncio
+    async def test_run_query_sets_session_store(self, orchestrator, data_repo):
+        template = Template.model_validate(SAMPLE_TEMPLATE)
+
+        with patch("backend.ai_orchestrator.query") as mock_query:
+            mock_query.return_value = mock_agent_messages(
+                tool_calls=[
+                    (
+                        "write_section_draft",
+                        {"section_id": "overview", "content": "draft"},
+                    ),
+                ],
+                session_id="sess-001",
+            )
+            await orchestrator.generate_drafts(
+                draftcircle_session_id="test-session",
+                agent_session_id=None,
+                template=template,
+                seed_content="Seed.",
+            )
+            opts = mock_query.call_args.kwargs["options"]
+            assert opts.session_store is not None
+            assert opts.env.get("CLAUDE_CONFIG_DIR") is not None
+
+    @pytest.mark.asyncio
+    async def test_run_query_sets_resume(self, orchestrator, data_repo):
+        template = Template.model_validate(SAMPLE_TEMPLATE)
+
+        with patch("backend.ai_orchestrator.query") as mock_query:
+            mock_query.return_value = mock_agent_messages(
+                tool_calls=[
+                    (
+                        "write_section_draft",
+                        {"section_id": "overview", "content": "draft"},
+                    ),
+                ],
+            )
+            await orchestrator.generate_drafts(
+                draftcircle_session_id="test-session",
+                agent_session_id="existing-session-42",
+                template=template,
+                seed_content="Seed.",
+            )
+            opts = mock_query.call_args.kwargs["options"]
+            assert opts.resume == "existing-session-42"
+
+    @pytest.mark.asyncio
+    async def test_flush_called_on_success(self, orchestrator, data_repo):
+        template = Template.model_validate(SAMPLE_TEMPLATE)
+
+        with (
+            patch("backend.ai_orchestrator.query") as mock_query,
+            patch(
+                "backend.git_session_store.GitSessionStore.flush"
+            ) as mock_flush,
+        ):
+            mock_query.return_value = mock_agent_messages(
+                tool_calls=[
+                    (
+                        "write_section_draft",
+                        {"section_id": "overview", "content": "draft"},
+                    ),
+                ],
+            )
+            await orchestrator.generate_drafts(
+                draftcircle_session_id="test-session",
+                agent_session_id=None,
+                template=template,
+                seed_content="Seed.",
+            )
+            mock_flush.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_flush_called_on_error(self, orchestrator, data_repo):
+        template = Template.model_validate(SAMPLE_TEMPLATE)
+
+        with (
+            patch("backend.ai_orchestrator.query") as mock_query,
+            patch(
+                "backend.git_session_store.GitSessionStore.flush"
+            ) as mock_flush,
+        ):
+            mock_query.side_effect = RuntimeError("API down")
+            with pytest.raises(RuntimeError):
+                await orchestrator.generate_drafts(
+                    draftcircle_session_id="test-session",
+                    agent_session_id=None,
+                    template=template,
+                    seed_content="Seed.",
+                )
+            mock_flush.assert_called_once()

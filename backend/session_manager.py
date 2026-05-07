@@ -504,12 +504,23 @@ class SessionManager:
         session.agent_session_id = agent_session_id
         self._save_session(session, f"session: store agent session ID for {session_id}")
 
+    _VALID_STATUS_TRANSITIONS: dict[SectionStatus, set[SectionStatus]] = {
+        SectionStatus.DRAFTING: {SectionStatus.DRAFT},
+    }
+
     def set_section_status(
         self, session_id: str, section_id: str, status: SectionStatus
     ) -> None:
         session = self._require_session(session_id)
         if section_id not in session.section_meta:
             raise ValueError(f"Section '{section_id}' not found")
+        current = session.section_meta[section_id].status
+        allowed = self._VALID_STATUS_TRANSITIONS.get(current, set())
+        if status not in allowed:
+            raise ValueError(
+                f"Cannot transition section '{section_id}' from"
+                f" '{current.value}' to '{status.value}'"
+            )
         session.section_meta[section_id].status = status
         self._save_session(session, f"status: {section_id} → {status.value}")
 

@@ -686,15 +686,25 @@ class TestSectionStatusTransitions:
         for meta in session.section_meta.values():
             assert meta.status == SectionStatus.DRAFT
 
-    def test_set_section_status(self, manager):
+    def test_set_section_status_valid_transition(self, manager):
         session = manager.create_session(
             template_slug="test-template",
             coordinator="alice",
             participants=[],
         )
-        manager.set_section_status(session.id, "overview", SectionStatus.IN_REVIEW)
+        manager.begin_drafting(session.id)
+        manager.set_section_status(session.id, "overview", SectionStatus.DRAFT)
         session = manager.get_session(session.id)
-        assert session.section_meta["overview"].status == SectionStatus.IN_REVIEW
+        assert session.section_meta["overview"].status == SectionStatus.DRAFT
+
+    def test_set_section_status_rejects_invalid_transition(self, manager):
+        session = manager.create_session(
+            template_slug="test-template",
+            coordinator="alice",
+            participants=[],
+        )
+        with pytest.raises(ValueError, match="Cannot transition"):
+            manager.set_section_status(session.id, "overview", SectionStatus.APPROVED)
 
     def test_comment_blocked_while_drafting(self, manager):
         session = manager.create_session(

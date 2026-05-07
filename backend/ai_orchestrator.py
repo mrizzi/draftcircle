@@ -2,7 +2,8 @@ import asyncio
 import logging
 from collections import defaultdict
 from dataclasses import dataclass
-from typing import Any
+from collections.abc import AsyncGenerator
+from typing import Any, Literal, TypedDict
 
 from claude_agent_sdk import (
     AssistantMessage,
@@ -112,6 +113,35 @@ class ReplyResult:
             raise ValueError("text must be non-empty")
 
 
+class AiActivityEvent(TypedDict):
+    type: Literal["ai_activity"]
+    section_id: str | None
+    text: str
+
+
+class SectionDraftedEvent(TypedDict):
+    type: Literal["section_drafted"]
+    section_id: str
+    content: str
+
+
+class DraftsCompleteEvent(TypedDict):
+    type: Literal["drafts_complete"]
+    session_id: str | None
+
+
+class AiCompleteEvent(TypedDict):
+    type: Literal["ai_complete"]
+    section_id: str
+    result_type: Literal["proposal", "reply"]
+    result: ProposalResult | ReplyResult
+    session_id: str | None
+
+
+DraftEvent = AiActivityEvent | SectionDraftedEvent | DraftsCompleteEvent
+CommentEvent = AiActivityEvent | AiCompleteEvent
+
+
 class AIOrchestrator:
     def __init__(self, git: GitStore, model: str = "claude-sonnet-4-6"):
         self._model = model
@@ -190,7 +220,7 @@ class AIOrchestrator:
         agent_session_id: str | None,
         template: Template,
         seed_content: str,
-    ):
+    ) -> AsyncGenerator[DraftEvent]:
         section_descriptions = []
         for i, section in enumerate(template.sections, start=1):
             section_descriptions.append(
@@ -245,7 +275,7 @@ class AIOrchestrator:
         new_comment_text: str,
         system_prompt: str = "",
         agent_session_id: str | None = None,
-    ):
+    ) -> AsyncGenerator[CommentEvent]:
         lock_key = f"{session_id}:{section_id}"
         async with self._section_locks[lock_key]:
             thread_text = ""

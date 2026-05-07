@@ -1,5 +1,4 @@
 import asyncio
-import json
 import logging
 import os
 from pathlib import Path
@@ -161,13 +160,10 @@ def create_app(data_repo_path: str | None = None) -> FastAPI:
                         if event["type"] == "ai_activity":
                             await ws_manager.broadcast(session.id, event)
                         elif event["type"] == "section_drafted":
-                            meta = session.section_meta.get(
-                                event["section_id"]
-                            )
+                            meta = session.section_meta.get(event["section_id"])
                             if meta:
                                 section_path = (
-                                    f"sessions/{session.id}/sections/"
-                                    f"{meta.filename}.md"
+                                    f"sessions/{session.id}/sections/{meta.filename}.md"
                                 )
                                 git.commit(
                                     f"draft: AI generated "
@@ -191,9 +187,7 @@ def create_app(data_repo_path: str | None = None) -> FastAPI:
                             agent_session_id = event.get("session_id")
 
                     if agent_session_id:
-                        sessions.set_agent_session_id(
-                            session.id, agent_session_id
-                        )
+                        sessions.set_agent_session_id(session.id, agent_session_id)
                     await ws_manager.broadcast(
                         session.id,
                         {
@@ -290,9 +284,7 @@ def create_app(data_repo_path: str | None = None) -> FastAPI:
                 )
                 meta = session.section_meta[req.section_id]
                 current_draft = (
-                    git.read_file(
-                        f"sessions/{session_id}/sections/{meta.filename}.md"
-                    )
+                    git.read_file(f"sessions/{session_id}/sections/{meta.filename}.md")
                     or ""
                 )
                 thread = [
@@ -306,9 +298,7 @@ def create_app(data_repo_path: str | None = None) -> FastAPI:
                     section_title=(
                         section_def.title if section_def else req.section_id
                     ),
-                    section_guidance=(
-                        section_def.guidance if section_def else ""
-                    ),
+                    section_guidance=(section_def.guidance if section_def else ""),
                     current_draft=current_draft,
                     comment_thread=thread[:-1],
                     new_comment_author=req.author,
@@ -326,9 +316,7 @@ def create_app(data_repo_path: str | None = None) -> FastAPI:
                             agent_session_id
                             and agent_session_id != session.agent_session_id
                         ):
-                            sessions.set_agent_session_id(
-                                session_id, agent_session_id
-                            )
+                            sessions.set_agent_session_id(session_id, agent_session_id)
 
                         if isinstance(result, ProposalResult):
                             proposal = sessions.create_proposal(
@@ -343,9 +331,7 @@ def create_app(data_repo_path: str | None = None) -> FastAPI:
                                 {
                                     "type": "proposal_created",
                                     "section_id": req.section_id,
-                                    "proposal": proposal.model_dump(
-                                        mode="json"
-                                    ),
+                                    "proposal": proposal.model_dump(mode="json"),
                                 },
                             )
                         elif isinstance(result, ReplyResult):

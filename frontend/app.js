@@ -339,6 +339,11 @@ async function handleCreateSession(e) {
     });
 
     if (session) {
+      const coordP = session.participants.find(p => p.user_id === coordinatorId);
+      if (coordP && coordP.token) {
+        state.token = coordP.token;
+        localStorage.setItem('dc-token-' + session.id, coordP.token);
+      }
       showInviteLinks(session);
       window.history.pushState({}, '', '/session/' + session.id);
       await openSession(session.id);

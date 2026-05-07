@@ -560,6 +560,8 @@ class TestPublishValidation:
         )
         assert resp.status_code == 422
         assert "project_key" in resp.json()["detail"][0]
+        assert len(resp.json()["detail"]) == 2
+        assert "summary" in resp.json()["detail"][1]
 
     def test_publish_passes_validation_with_required_fields(
         self, client, session_with_participant
@@ -577,3 +579,21 @@ class TestPublishValidation:
             json={"plugin": "markdown", "config": {}},
         )
         assert resp.status_code == 200
+
+    def test_publish_rejects_empty_string_required_fields(
+        self, client, session_with_participant
+    ):
+        sid = session_with_participant["id"]
+        uid = "alice"
+        for section_id in ["overview", "details", "notes"]:
+            client.post(
+                f"/api/sessions/{sid}/sections/{section_id}/approve",
+                json={"user_id": uid},
+            )
+
+        resp = client.post(
+            f"/api/sessions/{sid}/publish",
+            json={"plugin": "jira_feature", "config": {"project_key": "", "summary": ""}},
+        )
+        assert resp.status_code == 422
+        assert len(resp.json()["detail"]) == 2

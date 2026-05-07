@@ -51,7 +51,7 @@ def validate_plugin_config(
 ) -> list[str]:
     errors = []
     for field in schema:
-        name = field["name"]
+        name = field.get("name", "")
         if not _FIELD_NAME_RE.match(name):
             errors.append(f"Invalid field name: '{name}'")
             continue

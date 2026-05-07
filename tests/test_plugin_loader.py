@@ -52,6 +52,18 @@ class TestPluginLoader:
         with pytest.raises(ValueError, match="Invalid plugin name"):
             load_plugin("my-plugin")
 
+    def test_custom_plugin_without_config_schema_inherits_default(self, tmp_path):
+        custom_dir = tmp_path / "plugins"
+        custom_dir.mkdir()
+        (custom_dir / "minimal.py").write_text(
+            "from backend.plugins.base import OutputPlugin\n\n"
+            "class Plugin(OutputPlugin):\n"
+            "    def assemble(self, sections): return 'out'\n"
+            "    def publish(self, output, config): return 'ref'\n"
+        )
+        plugin = load_plugin("minimal", custom_plugins_dir=custom_dir)
+        assert plugin.config_schema == []
+
 
 class TestJiraPluginLoading:
     def test_loads_jira_feature_plugin(self):
@@ -235,3 +247,18 @@ class TestValidatePluginConfig:
         ]
         errors = validate_plugin_config(schema, {})
         assert len(errors) == 1
+
+    def test_rejects_schema_entry_missing_name(self):
+        schema = [
+            {"type": "text", "label": "Foo", "required": True},
+        ]
+        errors = validate_plugin_config(schema, {})
+        assert len(errors) == 1
+        assert "missing" in errors[0].lower() or "invalid" in errors[0].lower()
+
+    def test_explicit_required_false_treated_as_optional(self):
+        schema = [
+            {"name": "notes", "type": "text", "label": "Notes", "required": False},
+        ]
+        errors = validate_plugin_config(schema, {})
+        assert errors == []

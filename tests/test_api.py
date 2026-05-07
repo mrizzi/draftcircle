@@ -593,7 +593,10 @@ class TestPublishValidation:
 
         resp = client.post(
             f"/api/sessions/{sid}/publish",
-            json={"plugin": "jira_feature", "config": {"project_key": "", "summary": ""}},
+            json={
+                "plugin": "jira_feature",
+                "config": {"project_key": "", "summary": ""},
+            },
         )
         assert resp.status_code == 422
         assert len(resp.json()["detail"]) == 2

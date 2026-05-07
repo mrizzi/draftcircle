@@ -15,6 +15,7 @@ from claude_agent_sdk import (
     AssistantMessage,
     ClaudeSDKError,
     ResultMessage,
+    StreamEvent,
     TextBlock,
     ToolUseBlock,
 )
@@ -27,9 +28,27 @@ def orchestrator(data_repo):
     return AIOrchestrator(git=git)
 
 
-def mock_agent_messages(tool_calls=None, text=None, session_id="test-session"):
-    """Create an async generator mimicking query() output."""
+def mock_agent_messages(
+    tool_calls=None, text=None, session_id="test-session", stream_text=None
+):
+    """Create an async generator mimicking query() output.
+
+    Args:
+        stream_text: List of text chunks to yield as StreamEvent text deltas.
+    """
     messages = []
+    if stream_text:
+        for chunk in stream_text:
+            messages.append(
+                StreamEvent(
+                    uuid="evt-1",
+                    session_id=session_id,
+                    event={
+                        "type": "content_block_delta",
+                        "delta": {"type": "text_delta", "text": chunk},
+                    },
+                )
+            )
     if tool_calls:
         content = []
         for name, input_data in tool_calls:
@@ -61,6 +80,14 @@ def mock_agent_messages(tool_calls=None, text=None, session_id="test-session"):
             yield m
 
     return _iter()
+
+
+async def collect_events(gen):
+    """Consume an async generator and return all yielded events as a list."""
+    events = []
+    async for event in gen:
+        events.append(event)
+    return events
 
 
 class TestGenerateDrafts:

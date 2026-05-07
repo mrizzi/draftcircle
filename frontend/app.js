@@ -438,6 +438,17 @@ async function openSession(sessionId) {
   state.sectionProposals = {};
   state.activeSection = null;
   clearAiLog();
+  connectWebSocket(sessionId);
+
+  const hasDrafting = Object.values(state.currentSession.section_meta)
+    .some(m => m.status === 'drafting');
+  if (hasDrafting) {
+    showAiLogPanel();
+    appendAiLog('AI drafting in progress...', '');
+    state.aiLogAutoOpened = true;
+    state.aiLogOpen = true;
+    document.getElementById('ai-log-panel').classList.remove('ai-log-collapsed');
+  }
 
   const meta = state.currentSession.section_meta;
   await Promise.all(
@@ -461,7 +472,6 @@ async function openSession(sessionId) {
   resolveUserId();
   renderWorkspace();
   showView('workspace');
-  connectWebSocket(sessionId);
   updateHeader();
 }
 

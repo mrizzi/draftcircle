@@ -332,5 +332,7 @@ class TestAIGracefulDegradation:
         comments = client_ai.get(
             f"/api/sessions/{session_id}/sections/overview/comments"
         ).json()
-        assert len(comments) == 1
+        assert len(comments) == 2
         assert comments[0]["author"] == "alice"
+        assert comments[1]["author"] == "ai"
+        assert "error" in comments[1]["text"].lower()

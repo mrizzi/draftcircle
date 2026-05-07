@@ -12,6 +12,7 @@ class SectionPriority(str, Enum):
 
 
 class SectionStatus(str, Enum):
+    DRAFTING = "drafting"
     DRAFT = "draft"
     IN_REVIEW = "in-review"
     APPROVED = "approved"

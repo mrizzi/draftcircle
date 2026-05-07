@@ -498,3 +498,35 @@ class SessionManager:
         session = self._require_session(session_id)
         session.agent_session_id = agent_session_id
         self._save_session(session, f"session: store agent session ID for {session_id}")
+
+    def set_section_status(
+        self, session_id: str, section_id: str, status: SectionStatus
+    ) -> None:
+        session = self._require_session(session_id)
+        if section_id not in session.section_meta:
+            raise ValueError(f"Section '{section_id}' not found")
+        session.section_meta[section_id].status = status
+        self._save_session(
+            session, f"status: {section_id} → {status.value}"
+        )
+
+    def begin_drafting(self, session_id: str) -> None:
+        session = self._require_session(session_id)
+        for meta in session.section_meta.values():
+            meta.status = SectionStatus.DRAFTING
+        self._save_session(
+            session, f"draft: begin AI drafts for {session_id}"
+        )
+
+    def recover_drafting(self, session_id: str) -> None:
+        session = self._require_session(session_id)
+        changed = False
+        for meta in session.section_meta.values():
+            if meta.status == SectionStatus.DRAFTING:
+                meta.status = SectionStatus.DRAFT
+                changed = True
+        if changed:
+            self._save_session(
+                session,
+                f"draft: recover stuck sections for {session_id}",
+            )

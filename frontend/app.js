@@ -953,22 +953,72 @@ async function skipSection() {
   }
 }
 
-const PLUGIN_FIELDS = {
-  'jira_feature': 'publish-jira-fields',
-  'markdown': 'publish-markdown-fields',
-};
-
-function showPluginFields(pluginName) {
-  Object.values(PLUGIN_FIELDS).forEach(id => {
-    document.getElementById(id).style.display = 'none';
+function renderPluginFields(schema) {
+  var container = document.getElementById('publish-plugin-fields');
+  while (container.firstChild) container.removeChild(container.firstChild);
+  if (!schema || schema.length === 0) return;
+  schema.forEach(function(field) {
+    var fieldId = 'plugin-field-' + field.name;
+    var label = document.createElement('label');
+    label.textContent = field.label;
+    label.htmlFor = fieldId;
+    container.appendChild(label);
+    if (field.type === 'select') {
+      var select = document.createElement('select');
+      select.id = fieldId;
+      select.dataset.fieldName = field.name;
+      if (field.required) select.required = true;
+      if (!field.required) {
+        var blank = document.createElement('option');
+        blank.value = '';
+        blank.textContent = 'Select…';
+        select.appendChild(blank);
+      }
+      (field.options || []).forEach(function(opt) {
+        var option = document.createElement('option');
+        option.value = opt;
+        option.textContent = opt;
+        if (field.default === opt) option.selected = true;
+        select.appendChild(option);
+      });
+      container.appendChild(select);
+    } else {
+      var input = document.createElement('input');
+      input.type = 'text';
+      input.id = fieldId;
+      input.dataset.fieldName = field.name;
+      if (field.placeholder) input.placeholder = field.placeholder;
+      if (field.default) input.value = field.default;
+      if (field.required) input.required = true;
+      container.appendChild(input);
+      if (field.type === 'list') {
+        var hint = document.createElement('small');
+        hint.textContent = '(comma-separated)';
+        hint.style.display = 'block';
+        hint.style.marginTop = '-0.25rem';
+        hint.style.marginBottom = '0.5rem';
+        hint.style.opacity = '0.7';
+        container.appendChild(hint);
+      }
+    }
   });
-  const fieldId = PLUGIN_FIELDS[pluginName];
-  if (fieldId) document.getElementById(fieldId).style.display = 'block';
-  if (pluginName === 'jira_feature') {
-    document.getElementById('publish-summary').value = state.currentSession.id;
-  } else if (pluginName === 'markdown') {
-    document.getElementById('publish-filename').value = state.currentSession.id + '.md';
-  }
+}
+
+function collectPluginConfig(schema) {
+  var config = {};
+  if (!schema) return config;
+  var container = document.getElementById('publish-plugin-fields');
+  schema.forEach(function(field) {
+    var el = container.querySelector('[data-field-name="' + field.name + '"]');
+    if (!el) return;
+    var raw = el.value.trim();
+    if (field.type === 'list') {
+      config[field.name] = raw ? raw.split(',').map(function(s) { return s.trim(); }).filter(Boolean) : [];
+    } else {
+      config[field.name] = raw;
+    }
+  });
+  return config;
 }
 
 async function showPublishModal() {
@@ -976,41 +1026,36 @@ async function showPublishModal() {
     state.plugins = await apiFetch('/plugins');
   }
 
-  const select = document.getElementById('publish-plugin-select');
+  var select = document.getElementById('publish-plugin-select');
   select.textContent = '';
-  state.plugins.forEach(p => {
-    const opt = document.createElement('option');
+  state.plugins.forEach(function(p) {
+    var opt = document.createElement('option');
     opt.value = p.name;
     opt.textContent = p.name.replace(/_/g, ' ');
     select.appendChild(opt);
   });
 
-  select.onchange = () => showPluginFields(select.value);
-  showPluginFields(select.value);
+  function onPluginChange() {
+    var plugin = state.plugins.find(function(p) { return p.name === select.value; });
+    renderPluginFields(plugin ? plugin.config_schema : []);
+    var sessionId = state.currentSession ? state.currentSession.id : '';
+    var summaryInput = document.querySelector('[data-field-name="summary"]');
+    if (summaryInput && !summaryInput.value) summaryInput.value = sessionId;
+    var filenameInput = document.querySelector('[data-field-name="filename"]');
+    if (filenameInput && !filenameInput.value) filenameInput.value = sessionId + '.md';
+  }
+
+  select.onchange = onPluginChange;
+  onPluginChange();
 
   document.getElementById('publish-modal').style.display = 'flex';
 }
 
-function buildPluginConfig(pluginName) {
-  if (pluginName === 'jira_feature') {
-    const projectKey = document.getElementById('publish-project-key').value.trim();
-    const summary = document.getElementById('publish-summary').value.trim();
-    const labelsRaw = document.getElementById('publish-labels').value.trim();
-    const labels = labelsRaw ? labelsRaw.split(',').map(l => l.trim()).filter(Boolean) : [];
-    return { project_key: projectKey, summary: summary || state.currentSession.id, labels };
-  }
-  if (pluginName === 'markdown') {
-    const filename = document.getElementById('publish-filename').value.trim() || state.currentSession.id + '.md';
-    return { filename };
-  }
-  return {};
-}
-
 async function handlePublish(e) {
   e.preventDefault();
-  const pluginName = document.getElementById('publish-plugin-select').value;
-  const pluginMeta = state.plugins.find(p => p.name === pluginName);
-  const config = buildPluginConfig(pluginName);
+  var pluginName = document.getElementById('publish-plugin-select').value;
+  var pluginMeta = state.plugins.find(function(p) { return p.name === pluginName; });
+  var config = collectPluginConfig(pluginMeta ? pluginMeta.config_schema : []);
 
   const submitBtn = e.target.querySelector('button[type="submit"]');
   submitBtn.disabled = true;
@@ -1024,7 +1069,8 @@ async function handlePublish(e) {
     });
     if (!resp.ok) {
       const err = await resp.json().catch(() => ({ detail: resp.statusText }));
-      throw new Error(err.detail || resp.statusText);
+      var msg = Array.isArray(err.detail) ? err.detail.join('\n') : (err.detail || resp.statusText);
+      throw new Error(msg);
     }
 
     if (pluginMeta && pluginMeta.download) {

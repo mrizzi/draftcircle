@@ -6,6 +6,14 @@ from backend.plugins.base import OutputPlugin
 
 class Plugin(OutputPlugin):
     download = True
+    config_schema = [
+        {
+            "name": "filename",
+            "type": "text",
+            "label": "Filename",
+            "default": "document.md",
+        },
+    ]
 
     def assemble(self, sections: list[SectionContent]) -> str:
         parts = []

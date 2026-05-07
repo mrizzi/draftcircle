@@ -76,13 +76,9 @@ class GitSessionStore:
             child = f"{prefix_dir}/{name}"
             child_contents = self._git.list_directory(child)
             if child_contents:
-                for sub_name in child_contents:
-                    sub_path = f"{child}/{sub_name}"
-                    if self._git.file_exists(sub_path):
-                        all_files.append(sub_path)
+                all_files.extend(f"{child}/{sub}" for sub in child_contents)
             else:
-                if self._git.file_exists(child):
-                    all_files.append(child)
+                all_files.append(child)
         if all_files:
             self._git.delete_files(
                 f"agent: delete all transcripts for {key_prefix}",

@@ -21,6 +21,20 @@ class GitStore:
             raise ValueError(f"Path '{path}' escapes repository")
         return resolved
 
+    def _create_commit(self, message: str) -> str:
+        tree_oid = self.repo.index.write_tree()
+        sig = pygit2.Signature("DraftCircle", "draftcircle@localhost")
+        parents = [] if self.repo.head_is_unborn else [self.repo.head.target]
+
+        oid = self.repo.create_commit(
+            "refs/heads/main", sig, sig, message, tree_oid, parents
+        )
+
+        if self.repo.head_is_unborn:
+            self.repo.set_head("refs/heads/main")
+
+        return str(oid)
+
     def commit(self, message: str, files: dict[str, str]) -> str:
         for rel_path, content in files.items():
             full_path = self._check_path(rel_path)
@@ -33,27 +47,12 @@ class GitStore:
             index.add(rel_path)
         index.write()
 
-        tree_oid = index.write_tree()
-        sig = pygit2.Signature("DraftCircle", "draftcircle@localhost")
-
-        parents = []
-        if not self.repo.head_is_unborn:
-            parents = [self.repo.head.target]
-
-        oid = self.repo.create_commit(
-            "refs/heads/main", sig, sig, message, tree_oid, parents
-        )
-
-        if self.repo.head_is_unborn:
-            self.repo.set_head("refs/heads/main")
-
-        return str(oid)
+        return self._create_commit(message)
 
     def delete_files(self, message: str, paths: list[str]) -> str:
         for rel_path in paths:
             full_path = self._check_path(rel_path)
-            if full_path.exists():
-                full_path.unlink()
+            full_path.unlink(missing_ok=True)
 
         index = self.repo.index
         index.read()
@@ -64,17 +63,7 @@ class GitStore:
                 pass
         index.write()
 
-        tree_oid = index.write_tree()
-        sig = pygit2.Signature("DraftCircle", "draftcircle@localhost")
-
-        parents = []
-        if not self.repo.head_is_unborn:
-            parents = [self.repo.head.target]
-
-        oid = self.repo.create_commit(
-            "refs/heads/main", sig, sig, message, tree_oid, parents
-        )
-        return str(oid)
+        return self._create_commit(message)
 
     def read_file(self, path: str) -> str | None:
         full_path = self._check_path(path)

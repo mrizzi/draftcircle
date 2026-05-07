@@ -19,6 +19,9 @@ jobs:
       - name: Install dependencies
         run: pip install -e ".[dev]"
 
+      - name: Install Playwright browsers
+        run: playwright install --with-deps chromium
+
       - name: Lint
         run: ruff check .
 

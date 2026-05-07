@@ -9,6 +9,7 @@ from claude_agent_sdk import (
     ClaudeAgentOptions,
     ClaudeSDKError,
     ResultMessage,
+    StreamEvent,
     ToolUseBlock,
     create_sdk_mcp_server,
     query,
@@ -130,28 +131,31 @@ class AIOrchestrator:
         self._config_dir = str(git.repo_path / ".claude-sdk")
         self._section_locks: dict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
 
-    @staticmethod
-    async def _collect_messages(
-        prompt: str, opts: ClaudeAgentOptions
-    ) -> tuple[list, str | None]:
+    async def _stream_query(self, prompt: str, opts: ClaudeAgentOptions):
         content_blocks: list = []
         session_id: str | None = None
         async for message in query(prompt=prompt, options=opts):
-            if isinstance(message, AssistantMessage):
-                for block in message.content:
-                    content_blocks.append(block)
+            if isinstance(message, StreamEvent):
+                event = message.event
+                if (
+                    event.get("type") == "content_block_delta"
+                    and event.get("delta", {}).get("type") == "text_delta"
+                ):
+                    yield ("text_delta", event["delta"]["text"])
+            elif isinstance(message, AssistantMessage):
+                content_blocks.extend(message.content)
             elif isinstance(message, ResultMessage):
                 session_id = message.session_id
-        return content_blocks, session_id
+        yield ("result", (content_blocks, session_id))
 
-    async def _run_query(
+    async def _run_query_streaming(
         self,
         prompt: str,
         system_prompt: str,
         draftcircle_session_id: str,
         agent_session_id: str | None = None,
         allowed_tools: list[str] | None = None,
-    ) -> tuple[list, str | None]:
+    ):
         store = GitSessionStore(self._git, draftcircle_session_id)
 
         opts_kwargs: dict = {
@@ -163,6 +167,7 @@ class AIOrchestrator:
             "mcp_servers": {"draftcircle": DRAFT_SERVER},
             "session_store": store,
             "env": {"CLAUDE_CONFIG_DIR": self._config_dir},
+            "include_partial_messages": True,
         }
         if allowed_tools is not None:
             opts_kwargs["allowed_tools"] = allowed_tools
@@ -172,23 +177,24 @@ class AIOrchestrator:
         opts = ClaudeAgentOptions(**opts_kwargs)
 
         try:
-            content_blocks, session_id = await self._collect_messages(prompt, opts)
-        except ClaudeSDKError as exc:
-            if agent_session_id is not None and "session" in str(exc).lower():
-                logger.warning(
-                    "Stale agent session %s, starting fresh: %s",
-                    agent_session_id,
-                    exc,
-                )
-                opts_kwargs.pop("resume", None)
-                opts = ClaudeAgentOptions(**opts_kwargs)
-                content_blocks, session_id = await self._collect_messages(prompt, opts)
-            else:
-                raise
+            try:
+                async for event in self._stream_query(prompt, opts):
+                    yield event
+            except ClaudeSDKError as exc:
+                if agent_session_id is not None and "session" in str(exc).lower():
+                    logger.warning(
+                        "Stale agent session %s, starting fresh: %s",
+                        agent_session_id,
+                        exc,
+                    )
+                    opts_kwargs.pop("resume", None)
+                    opts = ClaudeAgentOptions(**opts_kwargs)
+                    async for event in self._stream_query(prompt, opts):
+                        yield event
+                else:
+                    raise
         finally:
             store.flush()
-
-        return content_blocks, session_id
 
     async def generate_drafts(
         self,
@@ -196,7 +202,7 @@ class AIOrchestrator:
         agent_session_id: str | None,
         template: Template,
         seed_content: str,
-    ) -> tuple[list[DraftResult], str | None]:
+    ):
         section_descriptions = []
         for i, section in enumerate(template.sections, start=1):
             section_descriptions.append(
@@ -212,26 +218,32 @@ class AIOrchestrator:
             f"{sections_text}"
         )
 
-        content_blocks, result_session_id = await self._run_query(
+        content_blocks = None
+        result_session_id = None
+
+        async for event_type, data in self._run_query_streaming(
             prompt=prompt,
             system_prompt=template.ai_context,
             draftcircle_session_id=draftcircle_session_id,
             agent_session_id=agent_session_id,
             allowed_tools=["mcp__draftcircle__write_section_draft"],
-        )
+        ):
+            if event_type == "text_delta":
+                yield {"type": "ai_activity", "section_id": None, "text": data}
+            elif event_type == "result":
+                content_blocks, result_session_id = data
 
-        drafts = []
-        for block in content_blocks:
+        for block in content_blocks or []:
             if isinstance(block, ToolUseBlock) and block.name.endswith(
                 "write_section_draft"
             ):
-                drafts.append(
-                    DraftResult(
-                        section_id=block.input["section_id"],
-                        content=block.input["content"],
-                    )
-                )
-        return drafts, result_session_id
+                yield {
+                    "type": "section_drafted",
+                    "section_id": block.input["section_id"],
+                    "content": block.input["content"],
+                }
+
+        yield {"type": "drafts_complete", "session_id": result_session_id}
 
     async def process_comment(
         self,
@@ -245,7 +257,7 @@ class AIOrchestrator:
         new_comment_text: str,
         system_prompt: str = "",
         agent_session_id: str | None = None,
-    ) -> tuple[ProposalResult | ReplyResult, str | None]:
+    ):
         lock_key = f"{session_id}:{section_id}"
         async with self._section_locks[lock_key]:
             thread_text = ""
@@ -267,7 +279,10 @@ class AIOrchestrator:
                 f"a draft change, use the post_reply tool."
             )
 
-            content_blocks, result_session_id = await self._run_query(
+            content_blocks = None
+            result_session_id = None
+
+            async for event_type, data in self._run_query_streaming(
                 prompt=prompt,
                 system_prompt=system_prompt,
                 draftcircle_session_id=session_id or "unknown",
@@ -276,20 +291,37 @@ class AIOrchestrator:
                     "mcp__draftcircle__propose_revision",
                     "mcp__draftcircle__post_reply",
                 ],
-            )
+            ):
+                if event_type == "text_delta":
+                    yield {
+                        "type": "ai_activity",
+                        "section_id": section_id,
+                        "text": data,
+                    }
+                elif event_type == "result":
+                    content_blocks, result_session_id = data
 
-            for block in content_blocks:
+            result = ReplyResult(text="I've noted your comment.")
+            for block in content_blocks or []:
                 if not isinstance(block, ToolUseBlock):
                     continue
                 if block.name.endswith("propose_revision"):
-                    return (
-                        ProposalResult(
-                            revised_text=block.input["revised_text"],
-                            summary=block.input["summary"],
-                        ),
-                        result_session_id,
+                    result = ProposalResult(
+                        revised_text=block.input["revised_text"],
+                        summary=block.input["summary"],
                     )
+                    break
                 if block.name.endswith("post_reply"):
-                    return ReplyResult(text=block.input["text"]), result_session_id
+                    result = ReplyResult(text=block.input["text"])
+                    break
 
-            return ReplyResult(text="I've noted your comment."), result_session_id
+            result_type = (
+                "proposal" if isinstance(result, ProposalResult) else "reply"
+            )
+            yield {
+                "type": "ai_complete",
+                "section_id": section_id,
+                "result_type": result_type,
+                "result": result,
+                "session_id": result_session_id,
+            }

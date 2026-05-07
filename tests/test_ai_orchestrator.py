@@ -501,6 +501,7 @@ class TestSessionStoreIntegration:
         assert mock_query.call_count == 2
         retry_opts = mock_query.call_args_list[1].kwargs["options"]
         assert retry_opts.resume is None
+        assert retry_opts.session_store is not None
 
     @pytest.mark.asyncio
     async def test_non_session_sdk_error_propagates(self, orchestrator, data_repo):

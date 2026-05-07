@@ -67,7 +67,7 @@ def create_app(data_repo_path: str | None = None) -> FastAPI:
     try:
         from backend.ai_orchestrator import AIOrchestrator
 
-        ai = AIOrchestrator()
+        ai = AIOrchestrator(git=git)
     except Exception:
         logger.warning("AI unavailable: Agent SDK init failed", exc_info=True)
 
@@ -147,7 +147,8 @@ def create_app(data_repo_path: str | None = None) -> FastAPI:
             )
             try:
                 drafts, agent_session_id = await ai.generate_drafts(
-                    session_id=session.agent_session_id,
+                    draftcircle_session_id=session.id,
+                    agent_session_id=session.agent_session_id,
                     template=template,
                     seed_content=req.seed_text,
                 )

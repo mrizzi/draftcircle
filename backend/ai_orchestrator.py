@@ -260,9 +260,7 @@ class AIOrchestrator:
         ):
             if event_type == _TAG_TEXT:
                 yield {"type": "ai_activity", "section_id": None, "text": data}
-            elif event_type == _TAG_TOOL and data.name.endswith(
-                "write_section_draft"
-            ):
+            elif event_type == _TAG_TOOL and data.name.endswith("write_section_draft"):
                 yield {
                     "type": "section_drafted",
                     "section_id": data.input["section_id"],

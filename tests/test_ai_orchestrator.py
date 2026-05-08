@@ -337,9 +337,7 @@ class TestGenerateDrafts:
         assert drafted[1]["section_id"] == "details"
         first_draft_idx = types.index("section_drafted")
         activity_between = [
-            e
-            for e in events[first_draft_idx + 1 :]
-            if e["type"] == "ai_activity"
+            e for e in events[first_draft_idx + 1 :] if e["type"] == "ai_activity"
         ]
         assert len(activity_between) > 0
 

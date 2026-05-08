@@ -22,6 +22,15 @@
   --diff-word-add: #bbf7d0;
   --diff-word-remove: #fecaca;
   --panel-width: 480px;
+  --log-bg: #1e1e1e;
+  --log-border: #333;
+  --log-text: #b5b5b5;
+  --log-text-muted: #999;
+  --log-text-hover: #ccc;
+  --log-close: #666;
+  --log-dot: #5cb3ff;
+  --log-error: #f87171;
+  --log-success: #4ade80;
 }
 
 body {
@@ -235,29 +244,29 @@ body {
 }
 
 #ai-log-panel {
-  background: #1e1e1e; border-top: 1px solid #333;
+  background: var(--log-bg); border-top: 1px solid var(--log-border);
   flex-shrink: 0;
 }
 .ai-log-collapsed #ai-log-body { display: none; }
 .ai-log-toggle {
   display: flex; align-items: center; gap: 0.5rem;
   padding: 0.5rem 1rem; cursor: pointer; font-size: 0.8rem;
-  font-weight: 600; color: #999;
-  user-select: none; border-bottom: 1px solid #333;
+  font-weight: 600; color: var(--log-text-muted);
+  user-select: none; border-bottom: 1px solid var(--log-border);
 }
-.ai-log-toggle:hover { color: #ccc; }
+.ai-log-toggle:hover { color: var(--log-text-hover); }
 .ai-log-close {
-  margin-left: auto; background: none; border: none; color: #666;
+  margin-left: auto; background: none; border: none; color: var(--log-close);
   font-size: 1.1rem; cursor: pointer; padding: 0 0.25rem; line-height: 1;
 }
-.ai-log-close:hover { color: #f87171; }
+.ai-log-close:hover { color: var(--log-error); }
 .ai-log-dot {
   width: 8px; height: 8px; border-radius: 50%;
-  background: #5cb3ff; animation: pulse-dot 1s ease-in-out infinite;
+  background: var(--log-dot); animation: pulse-dot 1s ease-in-out infinite;
 }
 @keyframes pulse-dot { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
 .ai-log-body { max-height: 200px; overflow-y: auto; padding: 0.5rem 1rem; }
 #ai-log-entries { display: flex; flex-direction: column; gap: 0.15rem; }
-.ai-log-entry { font-size: 0.8rem; font-family: "SF Mono", "Fira Code", monospace; color: #b5b5b5; line-height: 1.4; }
-.ai-log-entry.error { color: #f87171; }
-.ai-log-entry.complete { color: #4ade80; font-weight: 500; }
+.ai-log-entry { font-size: 0.8rem; font-family: "SF Mono", "Fira Code", monospace; color: var(--log-text); line-height: 1.4; }
+.ai-log-entry.error { color: var(--log-error); }
+.ai-log-entry.complete { color: var(--log-success); font-weight: 500; }

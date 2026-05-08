@@ -309,6 +309,7 @@ class AIOrchestrator:
 
             result = ReplyResult(text="I've noted your comment.")
             result_session_id = None
+            tool_matched = False
 
             async for event_type, data in self._run_query_streaming(
                 prompt=prompt,
@@ -326,14 +327,16 @@ class AIOrchestrator:
                         "section_id": section_id,
                         "text": data,
                     }
-                elif event_type == _TAG_TOOL:
+                elif event_type == _TAG_TOOL and not tool_matched:
                     if data.name.endswith("propose_revision"):
                         result = ProposalResult(
                             revised_text=data.input["revised_text"],
                             summary=data.input["summary"],
                         )
+                        tool_matched = True
                     elif data.name.endswith("post_reply"):
                         result = ReplyResult(text=data.input["text"])
+                        tool_matched = True
                 elif event_type == _TAG_DONE:
                     result_session_id = data
 

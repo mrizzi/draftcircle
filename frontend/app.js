@@ -107,7 +107,7 @@ function _aiLogNewEntry(className) {
 }
 
 function badgeClass(status) {
-  return 'badge badge-' + status;
+  return 'badge badge-' + status.replace(/[\s_]/g, '-');
 }
 
 function appendAiLogStream(text) {

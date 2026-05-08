@@ -11,7 +11,7 @@ if (typeof marked !== 'undefined') {
     renderer: {
       html: (token) => esc(token.text),
       link: ({ href, title, tokens }) => {
-        if (href && /^javascript:/i.test(href.replace(/\s/g, ''))) {
+        if (href && /^(javascript|data|vbscript):/i.test(href.replace(/\s/g, ''))) {
           return esc(tokens.map(t => t.raw).join(''));
         }
         const titleAttr = title ? ' title="' + esc(title) + '"' : '';

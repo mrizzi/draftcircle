@@ -75,17 +75,29 @@ function formatTime(iso) {
 }
 
 let _aiLogCurrent = null;
+let _aiLogEntriesEl = null;
+let _scrollRafPending = false;
+
+function _getLogEntries() {
+  if (!_aiLogEntriesEl) _aiLogEntriesEl = document.getElementById('ai-log-entries');
+  return _aiLogEntriesEl;
+}
 
 function _aiLogScroll() {
-  const body = document.getElementById('ai-log-body');
-  if (body) {
-    const near = body.scrollHeight - body.scrollTop - body.clientHeight < 30;
-    if (near) body.scrollTop = body.scrollHeight;
-  }
+  if (_scrollRafPending) return;
+  _scrollRafPending = true;
+  requestAnimationFrame(() => {
+    _scrollRafPending = false;
+    const body = document.getElementById('ai-log-body');
+    if (body) {
+      const near = body.scrollHeight - body.scrollTop - body.clientHeight < 30;
+      if (near) body.scrollTop = body.scrollHeight;
+    }
+  });
 }
 
 function _aiLogNewEntry(className) {
-  const entries = document.getElementById('ai-log-entries');
+  const entries = _getLogEntries();
   if (!entries) return null;
   const el = document.createElement('div');
   el.className = 'ai-log-entry' + (className ? ' ' + className : '');
@@ -94,8 +106,12 @@ function _aiLogNewEntry(className) {
   return el;
 }
 
+function badgeClass(status) {
+  return 'badge badge-' + status.replace('_', '-');
+}
+
 function appendAiLogStream(text) {
-  if (!document.getElementById('ai-log-entries')) return;
+  if (!_getLogEntries()) return;
   const lines = text.split('\n');
   for (let i = 0; i < lines.length; i++) {
     if (i > 0) _aiLogCurrent = null;
@@ -113,6 +129,12 @@ function appendAiLog(text, className) {
   _aiLogScroll();
 }
 
+function openAiLog() {
+  state.aiLogAutoOpened = true;
+  state.aiLogOpen = true;
+  document.getElementById('ai-log-panel').classList.remove('ai-log-collapsed');
+}
+
 function toggleAiLog() {
   const panel = document.getElementById('ai-log-panel');
   if (!panel) return;
@@ -122,12 +144,11 @@ function toggleAiLog() {
     state.aiLogHasNew = false;
     document.getElementById('ai-log-dot').style.display = 'none';
   }
-
 }
 
 function clearAiLog() {
   _aiLogCurrent = null;
-  const entries = document.getElementById('ai-log-entries');
+  const entries = _getLogEntries();
   if (entries) entries.textContent = '';
   state.aiLogAutoOpened = false;
   state.aiLogHasNew = false;
@@ -136,7 +157,6 @@ function clearAiLog() {
   if (panel) panel.classList.add('ai-log-collapsed');
   const dot = document.getElementById('ai-log-dot');
   if (dot) dot.style.display = 'none';
-
 }
 
 // --- Session List ---
@@ -438,10 +458,7 @@ async function openSession(sessionId) {
     .some(m => m.status === 'drafting');
   if (hasDrafting) {
     appendAiLog('AI drafting in progress...', '');
-    state.aiLogAutoOpened = true;
-    state.aiLogOpen = true;
-    document.getElementById('ai-log-panel').classList.remove('ai-log-collapsed');
-  
+    openAiLog();
   }
 
   const meta = state.currentSession.section_meta;
@@ -467,7 +484,6 @@ async function openSession(sessionId) {
   renderWorkspace();
   showView('workspace');
   updateHeader();
-
 }
 
 function updateHeader() {
@@ -529,7 +545,7 @@ function renderSidebar() {
     title.textContent = titleText;
     title.title = titleText;
     const badge = document.createElement('span');
-    badge.className = 'badge badge-' + meta.status.replace('_', '-');
+    badge.className = badgeClass(meta.status);
     badge.textContent = meta.status;
     header.appendChild(title);
     header.appendChild(badge);
@@ -647,7 +663,7 @@ function renderReviewArea() {
   const statusDiv = document.getElementById('review-status');
   statusDiv.textContent = '';
   const badge = document.createElement('span');
-  badge.className = 'badge badge-' + meta.status.replace('_', '-');
+  badge.className = badgeClass(meta.status);
   badge.textContent = meta.status;
   statusDiv.appendChild(badge);
 
@@ -1187,12 +1203,7 @@ async function handleWsMessage(msg) {
   const sectionId = msg.section_id;
 
   if (msg.type === 'ai_activity') {
-    if (!state.aiLogAutoOpened) {
-      state.aiLogAutoOpened = true;
-      state.aiLogOpen = true;
-      document.getElementById('ai-log-panel').classList.remove('ai-log-collapsed');
-    
-    }
+    if (!state.aiLogAutoOpened) openAiLog();
     if (!state.aiLogOpen) {
       state.aiLogHasNew = true;
       document.getElementById('ai-log-dot').style.display = '';

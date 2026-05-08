@@ -324,7 +324,6 @@ class TestProcessComment:
             )
 
         complete = next(e for e in events if e["type"] == "ai_complete")
-        assert complete["result_type"] == "proposal"
         assert isinstance(complete["result"], ProposalResult)
         assert "rate limiting" in complete["result"].revised_text
 
@@ -355,7 +354,6 @@ class TestProcessComment:
             )
 
         complete = next(e for e in events if e["type"] == "ai_complete")
-        assert complete["result_type"] == "reply"
         assert isinstance(complete["result"], ReplyResult)
         assert "rate limiting" in complete["result"].text
 

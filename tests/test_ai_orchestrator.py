@@ -269,6 +269,81 @@ class TestGenerateDrafts:
         assert types[-1] == "drafts_complete"
 
     @pytest.mark.asyncio
+    async def test_multi_message_yields_drafts_incrementally(self, orchestrator):
+        template = Template.model_validate(SAMPLE_TEMPLATE)
+
+        async def _multi_turn():
+            yield StreamEvent(
+                uuid="e1",
+                session_id="s",
+                event={
+                    "type": "content_block_delta",
+                    "delta": {"type": "text_delta", "text": "turn1"},
+                },
+            )
+            yield AssistantMessage(
+                content=[
+                    ToolUseBlock(
+                        id="t1",
+                        name="mcp__draftcircle__write_section_draft",
+                        input={"section_id": "overview", "content": "draft1"},
+                    )
+                ],
+                model="claude-sonnet-4-6",
+            )
+            yield StreamEvent(
+                uuid="e2",
+                session_id="s",
+                event={
+                    "type": "content_block_delta",
+                    "delta": {"type": "text_delta", "text": "turn2"},
+                },
+            )
+            yield AssistantMessage(
+                content=[
+                    ToolUseBlock(
+                        id="t2",
+                        name="mcp__draftcircle__write_section_draft",
+                        input={"section_id": "details", "content": "draft2"},
+                    )
+                ],
+                model="claude-sonnet-4-6",
+            )
+            yield ResultMessage(
+                subtype="success",
+                duration_ms=100,
+                duration_api_ms=80,
+                is_error=False,
+                num_turns=2,
+                session_id="s",
+                result="",
+            )
+
+        with patch("backend.ai_orchestrator.query") as mock_query:
+            mock_query.return_value = _multi_turn()
+            events = await collect_events(
+                orchestrator.generate_drafts(
+                    draftcircle_session_id="test-session",
+                    agent_session_id=None,
+                    template=template,
+                    seed_content="Seed.",
+                )
+            )
+
+        types = [e["type"] for e in events]
+        drafted = [e for e in events if e["type"] == "section_drafted"]
+        assert len(drafted) == 2
+        assert drafted[0]["section_id"] == "overview"
+        assert drafted[1]["section_id"] == "details"
+        first_draft_idx = types.index("section_drafted")
+        activity_between = [
+            e
+            for e in events[first_draft_idx + 1 :]
+            if e["type"] == "ai_activity"
+        ]
+        assert len(activity_between) > 0
+
+    @pytest.mark.asyncio
     async def test_yields_unknown_section_id(self, orchestrator):
         template = Template.model_validate(SAMPLE_TEMPLATE)
 
@@ -648,9 +723,21 @@ class TestResultDataclasses:
         with pytest.raises(ValueError, match="revised_text"):
             ProposalResult(revised_text="", summary="changed something")
 
+    def test_proposal_result_rejects_whitespace_revised_text(self):
+        with pytest.raises(ValueError, match="revised_text"):
+            ProposalResult(revised_text="   \n\t", summary="changed something")
+
+    def test_proposal_result_rejects_whitespace_summary(self):
+        with pytest.raises(ValueError, match="summary"):
+            ProposalResult(revised_text="valid text", summary="  \n ")
+
     def test_reply_result_rejects_empty_text(self):
         with pytest.raises(ValueError, match="text"):
             ReplyResult(text="")
+
+    def test_reply_result_rejects_whitespace_text(self):
+        with pytest.raises(ValueError, match="text"):
+            ReplyResult(text="  \n\t  ")
 
 
 class TestSessionStoreIntegration:

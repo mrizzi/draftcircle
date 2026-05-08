@@ -118,6 +118,12 @@ class TestTokenResolution:
             with api.websocket_connect(f"/ws/sessions/{sid}?token=bogus"):
                 pass
 
+    def test_no_token_on_websocket_rejected(self, api, session_with_drafts):
+        sid = session_with_drafts["id"]
+        with pytest.raises(Exception):
+            with api.websocket_connect(f"/ws/sessions/{sid}"):
+                pass
+
     def test_non_participant_cannot_act_on_sections(self, api, session_with_drafts):
         sid = session_with_drafts["id"]
 

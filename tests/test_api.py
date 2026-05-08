@@ -525,6 +525,15 @@ class TestCoordinatorTokenAccess:
             assert "token" in p
 
 
+class TestCSPHeader:
+    def test_csp_header_present(self, client):
+        resp = client.get("/api/templates")
+        csp = resp.headers.get("Content-Security-Policy", "")
+        assert "default-src 'self'" in csp
+        assert "script-src 'self' cdn.jsdelivr.net cdnjs.cloudflare.com" in csp
+        assert "connect-src 'self' ws: wss:" in csp
+
+
 class TestPluginEndpoints:
     def test_list_plugins_includes_config_schema(self, client):
         resp = client.get("/api/plugins")

@@ -112,12 +112,11 @@ class TestTokenResolution:
         resp = api.get(f"/api/sessions/{sid}", params={"token": "bogus-token"})
         assert "current_user_id" not in resp.json()
 
-    def test_invalid_token_on_websocket_has_null_user(self, api, session_with_drafts):
+    def test_invalid_token_on_websocket_rejected(self, api, session_with_drafts):
         sid = session_with_drafts["id"]
-        with api.websocket_connect(f"/ws/sessions/{sid}?token=bogus") as ws:
-            msg = ws.receive_json()
-            assert msg["type"] == "participant_joined"
-            assert msg["user"]["user_id"] is None
+        with pytest.raises(Exception):
+            with api.websocket_connect(f"/ws/sessions/{sid}?token=bogus"):
+                pass
 
     def test_non_participant_cannot_act_on_sections(self, api, session_with_drafts):
         sid = session_with_drafts["id"]

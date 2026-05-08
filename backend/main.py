@@ -8,6 +8,7 @@ from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
+from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse, Response
 
 from backend.git_store import GitStore
@@ -77,6 +78,23 @@ def create_app(data_repo_path: str | None = None) -> FastAPI:
         logger.warning("AI unavailable: Agent SDK init failed", exc_info=True)
 
     app = FastAPI()
+
+    csp = (
+        "default-src 'self'; "
+        "script-src 'self' cdn.jsdelivr.net cdnjs.cloudflare.com; "
+        "style-src 'self' 'unsafe-inline'; "
+        "connect-src 'self' ws: wss:; "
+        "img-src 'self' data:"
+    )
+
+    class CSPMiddleware(BaseHTTPMiddleware):
+        async def dispatch(self, request, call_next):
+            response = await call_next(request)
+            response.headers["Content-Security-Policy"] = csp
+            return response
+
+    app.add_middleware(CSPMiddleware)
+
     app.state.sessions = sessions
     app.state.git = git
 
@@ -568,6 +586,10 @@ def create_app(data_repo_path: str | None = None) -> FastAPI:
                 if p.token == token:
                     user_id = p.user_id
                     break
+
+        if user_id is None:
+            await websocket.close(code=4001, reason="Authentication required")
+            return
 
         await websocket.accept()
         ws_manager.connect(session_id, websocket)

@@ -130,9 +130,11 @@ function appendAiLog(text, className) {
 }
 
 function openAiLog() {
+  const panel = document.getElementById('ai-log-panel');
+  if (!panel) return;
   state.aiLogAutoOpened = true;
   state.aiLogOpen = true;
-  document.getElementById('ai-log-panel').classList.remove('ai-log-collapsed');
+  panel.classList.remove('ai-log-collapsed');
 }
 
 function toggleAiLog() {
